@@ -16,7 +16,8 @@ from typing import TYPE_CHECKING
 
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.sensors import ContactSensor
-from isaaclab.utils.math import quat_rotate_inverse, yaw_quat
+from isaaclab.utils.math import quat_rotate_inverse, yaw_quat, euler_xyz_from_quat
+import math
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
@@ -186,7 +187,44 @@ def robot_height_potential(env: ManagerBasedRLEnv, target_height: float = 0.8, s
     env._custom_buffers[buffer_key] = current_potential.clone()
     return shaped_reward
 
+def second_order_action_rate(env: ManagerBasedRLEnv) -> torch.Tensor:
+    buffer_key = "prev_prev_action"
+    if not hasattr(env, "_custom_buffers"):
+        env._custom_buffers = {}
+    if buffer_key not in env._custom_buffers:
+        env._custom_buffers[buffer_key] = env.action_manager.action.clone()
+    prev_prev_action = env._custom_buffers[buffer_key]
+    env._custom_buffers[buffer_key] = env.action_manager.prev_action.clone()
+    return torch.sum(torch.square((env.action_manager.action - 2 * env.action_manager.prev_action + prev_prev_action) / env.step_dt), dim=1)
 
+
+def foot_ref_height(env: ManagerBasedRLEnv, target_height: float = 0.2,frequency = 1.5 , sigma: float = 0.5) -> torch.Tensor:
+    
+    # 初期化時にepisode_length_bufが存在しない場合はゼロ配列を使用
+    if hasattr(env, 'episode_length_buf'):
+        time = env.episode_length_buf.float() * env.step_dt
+    else:
+        # 初期化時のダミー値（次元確認用）
+        time = torch.zeros(env.num_envs, device=env.device, dtype=torch.float)
+    # 位相角度を計算（ラジアン）
+    # 2π * f * t で周期的な角度を生成
+    phase_right = 2.0 * torch.pi * (time / frequency)
+    phase_left = 2.0 * torch.pi * (time / (frequency) + 0.5)  # 左足は右足と位相がπずれる
+    asset = env.scene["robot"]
+    foot_right_height = asset.data.body_pos_w[:, asset.find_bodies("right_foot_link")[0][0], 2]
+    foot_left_height = asset.data.body_pos_w[:, asset.find_bodies("left_foot_link")[0][0], 2]
+    
+    desired_foot_right_height = target_height * torch.clamp(torch.sin(phase_right),min=0.0)  # 0以下は単に0にする
+    desired_foot_left_height = target_height * torch.clamp(torch.sin(phase_left),min=0.0)
+
+    right_foot_height_error = torch.square(foot_right_height - desired_foot_right_height)
+    left_foot_height_error = torch.square(foot_left_height - desired_foot_left_height)
+
+    total_height_error = right_foot_height_error + left_foot_height_error
+
+    shaped_reward = torch.exp(-total_height_error / sigma)
+
+    return shaped_reward
 
 def joint_reqularization_potential(env: ManagerBasedRLEnv, sigma: float = 0.5, discount_factor: float = 0.99) -> torch.Tensor:
     asset = env.scene["robot"]
@@ -197,27 +235,29 @@ def joint_reqularization_potential(env: ManagerBasedRLEnv, sigma: float = 0.5, d
     asset_cfg_right_p.resolve(env.scene)
     asset_cfg_left_p.resolve(env.scene)
 
-    joint_pos_p = (asset.data.joint_pos[:, asset_cfg_right_p.joint_ids] - asset.data.default_joint_pos[:, asset_cfg_right_p.joint_ids]) \
-                   - (asset.data.joint_pos[:, asset_cfg_left_p.joint_ids] - asset.data.default_joint_pos[:, asset_cfg_left_p.joint_ids])
+    joint_pos_p = (asset.data.joint_pos[:, asset_cfg_right_p.joint_ids]) \
+                   - (asset.data.joint_pos[:, asset_cfg_left_p.joint_ids])
 
     # Roll joints (Hip, Ankle)
     asset_cfg_left_r = SceneEntityCfg("robot", joint_names=["Left_Hip_Roll", "Left_Ankle_Roll"])
     asset_cfg_right_r = SceneEntityCfg("robot", joint_names=["Right_Hip_Roll", "Right_Ankle_Roll"])
     asset_cfg_right_r.resolve(env.scene)
     asset_cfg_left_r.resolve(env.scene)
-    joint_pos_r = (asset.data.joint_pos[:, asset_cfg_right_r.joint_ids] - asset.data.default_joint_pos[:, asset_cfg_right_r.joint_ids]) \
-                     - (asset.data.joint_pos[:, asset_cfg_left_r.joint_ids] - asset.data.default_joint_pos[:, asset_cfg_left_r.joint_ids])
+    joint_pos_r = (asset.data.joint_pos[:, asset_cfg_right_r.joint_ids]) \
+                     - (asset.data.joint_pos[:, asset_cfg_left_r.joint_ids])
 
     # Yaw joints (Hip)
     asset_cfg_left_y = SceneEntityCfg("robot", joint_names=["Left_Hip_Yaw"])
     asset_cfg_right_y = SceneEntityCfg("robot", joint_names=["Right_Hip_Yaw"])
     asset_cfg_left_y.resolve(env.scene)
     asset_cfg_right_y.resolve(env.scene)
-    joint_pos_yr = asset.data.joint_pos[:, asset_cfg_right_y.joint_ids] - asset.data.default_joint_pos[:, asset_cfg_right_y.joint_ids]
-    joint_pos_yl = asset.data.joint_pos[:, asset_cfg_left_y.joint_ids] - asset.data.default_joint_pos[:, asset_cfg_left_y.joint_ids]
+    joint_pos_yr = asset.data.joint_pos[:, asset_cfg_right_y.joint_ids]
+    joint_pos_yl = asset.data.joint_pos[:, asset_cfg_left_y.joint_ids]
 
-    current_potential = torch.exp(-torch.sum(torch.square(joint_pos_p), dim=1) / sigma) + torch.exp(-torch.sum(torch.square(joint_pos_r), dim=1) / sigma) + \
-                            torch.exp(-torch.sum(torch.square(joint_pos_yr), dim=1) / sigma) + torch.exp(-torch.sum(torch.square(joint_pos_yl), dim=1) / sigma)
+    current_potential = torch.exp(-(torch.square(joint_pos_p)) / sigma).sum(dim=1) + \
+                            torch.exp(-(torch.square(joint_pos_r)) / sigma).sum(dim=1) + \
+                            torch.exp(-(torch.square(joint_pos_yr)) / sigma).sum(dim=1) + \
+                            torch.exp(-(torch.square(joint_pos_yl)) / sigma).sum(dim=1)
 
     buffer_key = "joint_reqularization_potential_prev"
     if not hasattr(env, "_custom_buffers"):
@@ -230,3 +270,61 @@ def joint_reqularization_potential(env: ManagerBasedRLEnv, sigma: float = 0.5, d
     shaped_reward = torch.where(reset_mask, torch.zeros_like(shaped_reward), shaped_reward)
     env._custom_buffers[buffer_key] = current_potential.clone()
     return shaped_reward
+
+
+def feet_distance(env: ManagerBasedRLEnv, feet_distance_ref = 0.3) -> torch.Tensor:
+    """Penalize distance between feet.
+
+    This function penalizes the agent for having its feet too far apart. The reward is computed as the
+    distance between the feet positions.
+    """
+    asset = env.scene["robot"]
+    _,_,base_yaw = euler_xyz_from_quat(asset.data.root_quat_w)
+    feet_distance = torch.abs(
+        -torch.sin(base_yaw) * (asset.data.body_pos_w[:, asset.find_bodies("right_foot_link")[0][0], 0] - asset.data.body_pos_w[:, asset.find_bodies("left_foot_link")[0][0], 0])
+         + torch.cos(base_yaw) * (asset.data.body_pos_w[:, asset.find_bodies("right_foot_link")[0][0], 1] - asset.data.body_pos_w[:, asset.find_bodies("left_foot_link")[0][0], 1])
+    )
+
+    return torch.clip(feet_distance_ref - feet_distance, min=0.0, max=0.1)
+
+
+def get_feet_offset(env: ManagerBasedRLEnv, feet_distance_ref = 0.3) -> torch.Tensor:
+    """Get the offset between left and right foot in the robot frame.
+
+    This function computes the offset between the left and right foot positions in the robot frame.
+    """
+    asset = env.scene["robot"]
+    _,_,base_yaw = euler_xyz_from_quat(asset.data.root_quat_w)
+    feet_x_offset = (
+        torch.cos(base_yaw) * (asset.data.body_pos_w[:, asset.find_bodies("right_foot_link")[0][0], 0] - asset.data.body_pos_w[:, asset.find_bodies("left_foot_link")[0][0], 0])
+         - torch.sin(base_yaw) * (asset.data.body_pos_w[:, asset.find_bodies("right_foot_link")[0][0], 1] - asset.data.body_pos_w[:, asset.find_bodies("left_foot_link")[0][0], 1])
+    )
+    feet_y_offset = (
+        -torch.sin(base_yaw) * (asset.data.body_pos_w[:, asset.find_bodies("right_foot_link")[0][0], 0] - asset.data.body_pos_w[:, asset.find_bodies("left_foot_link")[0][0], 0])
+         + torch.cos(base_yaw) * (asset.data.body_pos_w[:, asset.find_bodies("right_foot_link")[0][0], 1] - asset.data.body_pos_w[:, asset.find_bodies("left_foot_link")[0][0], 1])
+    )
+
+    feet_y_offset = feet_y_offset - feet_distance_ref
+    return feet_x_offset, feet_y_offset
+
+
+def knee_limit_lower(env: ManagerBasedRLEnv, knee_limit_angle: float = 0.0) -> torch.Tensor:
+    """Penalize knee joint limit violation.
+
+    This function penalizes the agent for violating the knee joint limits.
+    """
+    asset = env.scene["robot"]
+    asset_cfg_left_knee = SceneEntityCfg("robot", joint_names=["Left_Knee_Pitch"])
+    asset_cfg_right_knee = SceneEntityCfg("robot", joint_names=["Right_Knee_Pitch"])
+    asset_cfg_left_knee.resolve(env.scene)
+    asset_cfg_right_knee.resolve(env.scene)
+
+    left_knee_pos = asset.data.joint_pos[:, asset_cfg_left_knee.joint_ids]
+    right_knee_pos = asset.data.joint_pos[:, asset_cfg_right_knee.joint_ids]
+
+    left_knee_violation = torch.clamp(-left_knee_pos - knee_limit_angle, min=0.0)
+    right_knee_violation = torch.clamp(-right_knee_pos - knee_limit_angle, min=0.0)
+
+    total_violation = left_knee_violation + right_knee_violation
+
+    return total_violation.squeeze(-1)

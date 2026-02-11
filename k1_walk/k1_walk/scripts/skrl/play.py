@@ -46,6 +46,10 @@ parser.add_argument(
     help="The RL algorithm used for training the skrl agent.",
 )
 parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
+parser.add_argument("--log_data", action="store_true", default=False, help="Enable data logging.")
+parser.add_argument("--log_steps", type=int, default=5000, help="Maximum number of steps to log.")
+parser.add_argument("--log_env_ids", type=str, default="0", help="Comma-separated environment IDs to log (e.g., '0,1,2').")
+parser.add_argument("--log_output_dir", type=str, default="review/play_data", help="Directory to save logged data.")
 
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
@@ -64,6 +68,7 @@ import gymnasium as gym
 import os
 import time
 import torch
+from tqdm import tqdm
 
 import skrl
 from packaging import version
@@ -92,6 +97,7 @@ import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path, load_cfg_from_registry, parse_env_cfg
 
 import k1_walk.tasks  # noqa: F401
+from k1_walk.tasks.manager_based.k1_walk.mdp.data_logger import RobotDataLogger
 
 # config shortcuts
 algorithm = args_cli.algorithm.lower()
@@ -158,6 +164,21 @@ def main():
     # wrap around environment for skrl
     env = SkrlVecEnvWrapper(env, ml_framework=args_cli.ml_framework)  # same as: `wrap_env(env, wrapper="auto")`
 
+    # initialize data logger if enabled
+    logger = None
+    if args_cli.log_data:
+        # Parse environment IDs
+        env_ids = [int(x.strip()) for x in args_cli.log_env_ids.split(",")]
+        # Get the unwrapped environment for logging
+        unwrapped_env = env.unwrapped
+        # Unwrap RecordVideo wrapper if present
+        if args_cli.video:
+            unwrapped_env = unwrapped_env.env
+        logger = RobotDataLogger(unwrapped_env, max_steps=args_cli.log_steps, env_ids=env_ids)
+        print(f"[INFO] Data logging enabled for environments: {env_ids}")
+        print(f"[INFO] Max steps to log: {args_cli.log_steps}")
+        print(f"[INFO] Output directory: {args_cli.log_output_dir}")
+
     # configure and instantiate the skrl runner
     # https://skrl.readthedocs.io/en/latest/api/utils/runner.html
     experiment_cfg["trainer"]["close_environment_at_exit"] = False
@@ -173,6 +194,12 @@ def main():
     # reset environment
     obs, _ = env.reset()
     timestep = 0
+
+    # initialize progress bar if logging is enabled
+    pbar = None
+    if logger is not None:
+        pbar = tqdm(total=args_cli.log_steps, desc="Logging progress", unit="step")
+
     # simulate environment
     while simulation_app.is_running():
         start_time = time.time()
@@ -189,6 +216,19 @@ def main():
                 actions = outputs[-1].get("mean_actions", outputs[0])
             # env stepping
             obs, _, _, _, _ = env.step(actions)
+
+        # log data if enabled
+        if logger is not None:
+            if logger.record(command_name="base_velocity"):
+                if pbar is not None:
+                    pbar.update(1)
+                    pbar.close()
+                print(f"\n[INFO] Data logging reached maximum steps: {logger.max_steps}")
+                break
+            # update progress bar
+            if pbar is not None:
+                pbar.update(1)
+
         if args_cli.video:
             timestep += 1
             # exit the play loop after recording one video
@@ -199,6 +239,27 @@ def main():
         sleep_time = dt - (time.time() - start_time)
         if args_cli.real_time and sleep_time > 0:
             time.sleep(sleep_time)
+
+    # close progress bar if still open
+    if pbar is not None:
+        pbar.close()
+
+    # save logged data
+    if logger is not None and logger.step_count > 0:
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_dir = os.path.abspath(args_cli.log_output_dir)
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Save as pickle
+        pkl_path = os.path.join(output_dir, f"robot_data_{timestamp}.pkl")
+        logger.save(pkl_path)
+
+        # Save as CSV
+        csv_dir = os.path.join(output_dir, f"csv_{timestamp}")
+        logger.save_csv(csv_dir)
+
+        print(f"[INFO] Data logging complete. Logged {logger.step_count} steps.")
 
     # close the simulator
     env.close()

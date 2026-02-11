@@ -1,3 +1,3 @@
 #!/bin/bash
 source ~/.bash_functions
-_labpython play.py --task K1-Walk-Play --num_envs 3 $@
+_labpython play.py --task K1-Walk-Play --num_envs 1 $@

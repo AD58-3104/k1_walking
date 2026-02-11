@@ -56,7 +56,7 @@ BOOSTER_K1_CFG = ArticulationCfg(
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         # pos=(0.0, 0.0, 0.72 - 0.0841),
-        pos=(0.0, 0.0, 0.72),
+        pos=(0.0, 0.0, 0.8),
         joint_pos={
             "AAHead_Yaw" : 0.0, 
             "Head_Pitch" : 0.0, 
@@ -69,18 +69,18 @@ BOOSTER_K1_CFG = ArticulationCfg(
             "Right_Elbow_Pitch" : 0.0, 
             "Right_Elbow_Yaw" : 0.0, 
 
-            "Left_Hip_Pitch" : -0.2, 
+            "Left_Hip_Pitch" : 0.0, 
             "Left_Hip_Roll" : 0.0, 
             "Left_Hip_Yaw" : 0.0, 
-            "Left_Knee_Pitch" : 0.4, 
-            "Left_Ankle_Pitch" : -0.25, 
+            "Left_Knee_Pitch" : 0.0, 
+            "Left_Ankle_Pitch" : 0.0, 
             "Left_Ankle_Roll" : 0.0, 
             
-            "Right_Hip_Pitch" : -0.2, 
+            "Right_Hip_Pitch" : 0.0, 
             "Right_Hip_Roll" : 0.0, 
             "Right_Hip_Yaw" : 0.0, 
-            "Right_Knee_Pitch" : 0.4, 
-            "Right_Ankle_Pitch" : -0.25, 
+            "Right_Knee_Pitch" : 0.0, 
+            "Right_Ankle_Pitch" : 0.0, 
             "Right_Ankle_Roll" : 0.0,
         },
         joint_vel={".*": 0.0},
@@ -268,23 +268,34 @@ class K1Rewards:
     termination_penalty = RewTerm(func=mdp.is_terminated, weight=-200.0)
     track_lin_vel_xy_exp = RewTerm(
         func=mdp.track_lin_vel_xy_yaw_frame_exp,
-        weight=10.0,
-        params={"command_name": "base_velocity", "std": 0.5},
+        weight=6.0,
+        params={"command_name": "base_velocity", "std": 0.25},
     )
+
     track_ang_vel_z_exp = RewTerm(
-        func=mdp.track_ang_vel_z_world_exp, weight=5.0, params={"command_name": "base_velocity", "std": 0.5}
+        func=mdp.track_ang_vel_z_world_exp, weight=3.0, params={"command_name": "base_velocity", "std": 0.25}
     )
 
     height_potential = RewTerm(
-        func=mdp.robot_height_potential, weight=8.0, params={"target_height": 0.75, "sigma": 0.1}
+        func=mdp.robot_height_potential, weight=10.0, params={"target_height": 0.70, "sigma": 0.2, "discount_factor": 0.99}
     )
 
     orientation_potential = RewTerm(
-        func=mdp.orientation_potential, weight=8.0, params={"sigma": 0.1}
+        func=mdp.orientation_potential, weight=30.0, params={"sigma": 0.15, "discount_factor": 0.985}
     )
 
     joint_reqularization_potential = RewTerm(
-        func=mdp.joint_reqularization_potential, weight=0.5, params={"sigma": 0.3}
+        func=mdp.joint_reqularization_potential, weight=1.0, params={"sigma": 0.4}
+    )
+
+    foot_symmetry_height = RewTerm(
+        func=mdp.foot_ref_height, weight=0.5,
+        params={"target_height": 0.15, "frequency": 1.5, "sigma": 0.17 },
+    )
+
+    knee_limit_lower = RewTerm(
+        func=mdp.knee_limit_lower, weight=-1.0,
+        params={"knee_limit_angle": 0.0},  # 0 rad よりも大きくないとペナルティ
     )
 
     joint_torque = RewTerm(
@@ -296,7 +307,7 @@ class K1Rewards:
 
     dof_pos_limits = RewTerm(
         func=mdp.joint_pos_limits,
-        weight=-5.0,
+        weight=-10.0,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Ankle_.*", ".*_Hip_.*", ".*_Knee_.*"])},
     )
 
@@ -310,15 +321,19 @@ class K1Rewards:
         func=mdp.action_rate_l2, weight=-1e-4
     )
 
-    # feet_air_time = RewTerm(
-    #     func=mdp.feet_air_time_positive_biped,
-    #     weight=0.25,
-    #     params={
-    #         "command_name": "base_velocity",
-    #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
-    #         "threshold": 0.4,
-    #     },
-    # )
+    second_order_action_rate = RewTerm(
+        func=mdp.second_order_action_rate, weight=-5e-5
+    )
+
+    feet_air_time = RewTerm(
+        func=mdp.feet_air_time_positive_biped,
+        weight=0.25,
+        params={
+            "command_name": "base_velocity",
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
+            "threshold": 0.4,
+        },
+    )
 
     # feet_slide = RewTerm(
     #     func=mdp.feet_slide,
@@ -419,8 +434,9 @@ class TerminationsCfg:
 @configclass
 class CurriculumCfg:
     """Curriculum terms for the MDP."""
-
     terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
+    foot_height_weights = CurrTerm(func=mdp.modify_reward_weight,
+                                   params= {"term_name": "foot_symmetry_height", "weight": 1.0, "num_steps": 10000} )
 
 @configclass
 class K1RoughEnvCfg(ManagerBasedRLEnvCfg):
@@ -441,6 +457,7 @@ class K1RoughEnvCfg(ManagerBasedRLEnvCfg):
         self.episode_length_s = 20.0
         # simulation settings
         self.sim.dt = 0.005
+        self.sim.device = "cuda:0"  # Explicitly set to GPU
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
         self.sim.physx.gpu_max_rigid_patch_count = 10 * 2**15

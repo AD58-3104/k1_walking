@@ -45,13 +45,13 @@ agent:
   mini_batches: 16
   discount_factor: 0.99
   lambda: 0.95
-  learning_rate: 1.0e-03
+  learning_rate: 1.0e-04
   learning_rate_scheduler: KLAdaptiveLR
   learning_rate_scheduler_kwargs:
     kl_threshold: 0.01
-  state_preprocessor: RunningStandardScaler
+  state_preprocessor: null
   state_preprocessor_kwargs: null
-  value_preprocessor: RunningStandardScaler
+  value_preprocessor: null
   value_preprocessor_kwargs: null
   random_timesteps: 0
   learning_starts: 0
@@ -68,7 +68,7 @@ agent:
   experiment:
     directory: "k1_walk"
     experiment_name: ""
-    write_interval: auto
+    write_interval: 500
     checkpoint_interval: auto
 
 
