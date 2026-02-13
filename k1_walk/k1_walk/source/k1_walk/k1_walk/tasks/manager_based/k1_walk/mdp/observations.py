@@ -64,15 +64,12 @@ def clock_phase(env: ManagerBasedRLEnv, frequency: float = 1.0) -> torch.Tensor:
     """
     Args:
         env: 環境インスタンス
-        frequency: 位相の周波数 [Hz]
-            - 0.5 Hz = 2秒周期（ゆっくりとした歩行）
-            - 1.0 Hz = 1秒周期（通常の歩行）
-            - 1.5 Hz = 0.67秒周期（速い歩行）
+        frequency: 歩行の周期.一回の歩行に掛かる時間
 
     Returns:
         torch.Tensor: shape (num_envs, 3) の観測値
-            - [:, 0]: sin(2π * frequency * time)
-            - [:, 1]: cos(2π * frequency * time)
+            - [:, 0]: sin(2π * (time / frequency))
+            - [:, 1]: cos(2π * (time / frequency))
             - [:, 2]: combine_phase
     """
     # 環境の現在時刻を取得（秒単位）
@@ -87,7 +84,7 @@ def clock_phase(env: ManagerBasedRLEnv, frequency: float = 1.0) -> torch.Tensor:
 
     # 位相角度を計算（ラジアン）
     # 2π * f * t で周期的な角度を生成
-    phase = 2.0 * torch.pi * frequency * time
+    phase = 2.0 * torch.pi * (time / frequency)
 
     # sin と cos のペアを計算して返す
     # これにより位相情報が連続的な2次元空間で表現される

@@ -39,7 +39,7 @@ import k1_walk.tasks  # noqa: F401
 
 
 def main():
-    """Zero actions agent with Isaac Lab environment."""
+    """Agent that maintains initial joint positions."""
     # parse configuration
     env_cfg = parse_env_cfg(
         args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, use_fabric=not args_cli.disable_fabric
@@ -52,11 +52,28 @@ def main():
     print(f"[INFO]: Gym action space: {env.action_space}")
     # reset environment
     env.reset()
+
+    # Get action information
+    robot = env.unwrapped.scene["robot"]
+    action_term = env.unwrapped.action_manager._terms["joint_pos"]
+    action_joint_names = action_term._joint_names
+    action_joint_indices = action_term._joint_ids[0]  # Get indices for first environment
+
+    # Get default positions for action-controlled joints
+    all_default_joint_pos = robot.data.default_joint_pos
+    initial_joint_pos = all_default_joint_pos[:, action_joint_indices]
+
+    print(f"[INFO]: Action-controlled joints: {action_joint_names}")
+    print(f"[INFO]: Initial joint positions: {initial_joint_pos[0]}")
+    print(f"[INFO]: Action space shape: {env.action_space.shape}")
+    print(f"[INFO]: use_default_offset: {action_term.cfg.use_default_offset}")
+
     # simulate environment
     while simulation_app.is_running():
         # run everything in inference mode
         with torch.inference_mode():
-            # compute zero actions
+            # Since use_default_offset=True, zero actions maintain the default (initial) positions
+            # Zero offset from default position = maintain initial position
             actions = torch.zeros(env.action_space.shape, device=env.unwrapped.device)
             # apply actions
             env.step(actions)

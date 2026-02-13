@@ -56,31 +56,31 @@ BOOSTER_K1_CFG = ArticulationCfg(
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         # pos=(0.0, 0.0, 0.72 - 0.0841),
-        pos=(0.0, 0.0, 0.8),
+        pos=(0.0, 0.0, 0.7),
         joint_pos={
-            "AAHead_Yaw" : 0.0, 
+            "AAHead_Yaw" : 0.9, 
             "Head_Pitch" : 0.0, 
             "ALeft_Shoulder_Pitch" : 0.0, 
             "ARight_Shoulder_Pitch" : 0.0,   # ここはラジアンで指定するっぽい
-            "Left_Shoulder_Roll" : -0.7853981634,  # 地面に対して水平が0度なので、内側に動かすで正しい？ 
+            "Left_Shoulder_Roll" : 0.0, #-0.7853981634,  # 地面に対して水平が0度なので、内側に動かすで正しい？ 
             "Left_Elbow_Pitch" : 0.0, 
             "Left_Elbow_Yaw" : 0.0, 
-            "Right_Shoulder_Roll" : 0.7853981634, 
+            "Right_Shoulder_Roll" : 0.0, #0.7853981634, 
             "Right_Elbow_Pitch" : 0.0, 
             "Right_Elbow_Yaw" : 0.0, 
 
-            "Left_Hip_Pitch" : 0.0, 
+            "Left_Hip_Pitch" : -0.2, 
             "Left_Hip_Roll" : 0.0, 
             "Left_Hip_Yaw" : 0.0, 
-            "Left_Knee_Pitch" : 0.0, 
-            "Left_Ankle_Pitch" : 0.0, 
+            "Left_Knee_Pitch" : 0.4, 
+            "Left_Ankle_Pitch" : -0.25, 
             "Left_Ankle_Roll" : 0.0, 
             
-            "Right_Hip_Pitch" : 0.0, 
+            "Right_Hip_Pitch" : -0.2, 
             "Right_Hip_Roll" : 0.0, 
             "Right_Hip_Yaw" : 0.0, 
-            "Right_Knee_Pitch" : 0.0, 
-            "Right_Ankle_Pitch" : 0.0, 
+            "Right_Knee_Pitch" : 0.4, 
+            "Right_Ankle_Pitch" : -0.25, 
             "Right_Ankle_Roll" : 0.0,
         },
         joint_vel={".*": 0.0},
@@ -222,7 +222,7 @@ class ActionsCfg:
         ".*_Hip_.*",
         ".*_Knee_.*",
         ".*_Ankle_.*"
-    ], scale=1.0)
+    ], scale=1.0, use_default_offset=True)
 
 @configclass
 class ObservationsCfg:
@@ -277,11 +277,11 @@ class K1Rewards:
     )
 
     height_potential = RewTerm(
-        func=mdp.robot_height_potential, weight=10.0, params={"target_height": 0.70, "sigma": 0.2, "discount_factor": 0.99}
+        func=mdp.robot_height_potential, weight=20.0, params={"target_height": 0.60, "sigma": 0.2, "discount_factor": 0.99}
     )
 
     orientation_potential = RewTerm(
-        func=mdp.orientation_potential, weight=30.0, params={"sigma": 0.15, "discount_factor": 0.985}
+        func=mdp.orientation_potential, weight=30.0, params={"sigma": 0.12, "discount_factor": 0.985}
     )
 
     joint_reqularization_potential = RewTerm(
@@ -290,7 +290,7 @@ class K1Rewards:
 
     foot_symmetry_height = RewTerm(
         func=mdp.foot_ref_height, weight=0.5,
-        params={"target_height": 0.15, "frequency": 1.5, "sigma": 0.17 },
+        params={"target_height": 0.18, "frequency": 1.5, "sigma": 0.17 },
     )
 
     knee_limit_lower = RewTerm(
@@ -304,6 +304,15 @@ class K1Rewards:
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Ankle_.*", ".*_Hip_.*", ".*_Knee_.*"])}
     )
 
+    feet_parallel_to_ground = RewTerm(
+        func=mdp.feet_parallel_to_ground, weight=2.0,
+        params={"sigma": 0.3}
+    )
+
+    feet_y_distance = RewTerm(
+        func=mdp.feet_y_distance, weight=-2.0,
+        params={"feet_distance_ref": 0.2}
+    )
 
     dof_pos_limits = RewTerm(
         func=mdp.joint_pos_limits,
@@ -318,20 +327,20 @@ class K1Rewards:
     )
 
     action_rate_l2 = RewTerm(
-        func=mdp.action_rate_l2, weight=-1e-4
+        func=mdp.action_rate_l2, weight=-1e-3
     )
 
     second_order_action_rate = RewTerm(
-        func=mdp.second_order_action_rate, weight=-5e-5
+        func=mdp.second_order_action_rate, weight=-1e-4
     )
 
     feet_air_time = RewTerm(
         func=mdp.feet_air_time_positive_biped,
-        weight=0.25,
+        weight=1.6,
         params={
             "command_name": "base_velocity",
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
-            "threshold": 0.4,
+            "threshold": 0.7,
         },
     )
 
@@ -402,7 +411,7 @@ class EventCfg:
         func=mdp.reset_joints_by_scale,
         mode="reset",
         params={
-            "position_range": (0.5, 1.5),
+            "position_range": (0.95, 1.05),
             "velocity_range": (0.0, 0.0),
         },
     )
@@ -429,6 +438,11 @@ class TerminationsCfg:
     root_height_low = DoneTerm(
         func=mdp.root_height_below_minimum,
         params={"asset_cfg": SceneEntityCfg("robot", body_names="trunk_link"), "minimum_height": 0.4},
+    )
+
+    bad_orientation = DoneTerm(
+        func=mdp.bad_orientation,
+        params={"limit_angle": 0.1},
     )
 
 @configclass

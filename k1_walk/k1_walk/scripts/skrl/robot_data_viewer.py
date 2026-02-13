@@ -38,6 +38,11 @@ def load_csv_data(csv_dir, env_id):
     return None
 
 
+def normalize_angle_deg(angle_deg):
+    """Normalize angle to [-180, 180] range."""
+    return ((angle_deg + 180) % 360) - 180
+
+
 def plot_robot_orientation(data, env_idx, time_range):
     """Plot roll, pitch, yaw over time."""
     start_idx, end_idx = time_range
@@ -50,21 +55,26 @@ def plot_robot_orientation(data, env_idx, time_range):
         vertical_spacing=0.08
     )
 
+    # Normalize angles to [-180, 180] range
+    roll_deg = normalize_angle_deg(np.rad2deg(euler[:, 0]))
+    pitch_deg = normalize_angle_deg(np.rad2deg(euler[:, 1]))
+    yaw_deg = normalize_angle_deg(np.rad2deg(euler[:, 2]))
+
     # Roll
     fig.add_trace(
-        go.Scatter(x=steps, y=np.rad2deg(euler[:, 0]), name='Roll', line=dict(color='red')),
+        go.Scatter(x=steps, y=roll_deg, name='Roll', line=dict(color='red')),
         row=1, col=1
     )
 
     # Pitch
     fig.add_trace(
-        go.Scatter(x=steps, y=np.rad2deg(euler[:, 1]), name='Pitch', line=dict(color='green')),
+        go.Scatter(x=steps, y=pitch_deg, name='Pitch', line=dict(color='green')),
         row=2, col=1
     )
 
     # Yaw
     fig.add_trace(
-        go.Scatter(x=steps, y=np.rad2deg(euler[:, 2]), name='Yaw', line=dict(color='blue')),
+        go.Scatter(x=steps, y=yaw_deg, name='Yaw', line=dict(color='blue')),
         row=3, col=1
     )
 
