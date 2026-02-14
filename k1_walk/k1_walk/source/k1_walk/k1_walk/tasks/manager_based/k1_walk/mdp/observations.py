@@ -89,7 +89,7 @@ def clock_phase(env: ManagerBasedRLEnv, frequency: float = 1.0) -> torch.Tensor:
     # sin と cos のペアを計算して返す
     # これにより位相情報が連続的な2次元空間で表現される
     sin_phase = torch.sin(phase).unsqueeze(-1)  # (num_envs, 1)
-    cos_phase = torch.cos(phase).unsqueeze(-1)  # (num_envs, 1)
+    cos_phase = torch.sin(phase + 0.5).unsqueeze(-1)  # (num_envs, 1)
     combine_phase = sin_phase / 2 * torch.sqrt(torch.square(sin_phase) + 0.04) + 0.5  # (num_envs, 1)
 
     return torch.cat([sin_phase, cos_phase, combine_phase], dim=-1)  # (num_envs, 3)

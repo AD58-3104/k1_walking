@@ -250,7 +250,7 @@ class ObservationsCfg:
                 },
             )
         velocity_commands = ObsTerm(func=mdp.generated_commands, params={"command_name": "base_velocity"})
-        clock_phase = ObsTerm(func=mdp.clock_phase, params={"frequency": 1.5})
+        clock_phase = ObsTerm(func=mdp.clock_phase, params={"frequency": 2.0})
 
         def __post_init__(self):
             self.enable_corruption = True
@@ -277,7 +277,7 @@ class K1Rewards:
     )
 
     height_potential = RewTerm(
-        func=mdp.robot_height_potential, weight=20.0, params={"target_height": 0.60, "sigma": 0.2, "discount_factor": 0.99}
+        func=mdp.robot_height_potential, weight=20.0, params={"target_height": 0.45, "sigma": 0.2, "discount_factor": 0.99}
     )
 
     orientation_potential = RewTerm(
@@ -285,12 +285,12 @@ class K1Rewards:
     )
 
     joint_reqularization_potential = RewTerm(
-        func=mdp.joint_reqularization_potential, weight=1.0, params={"sigma": 0.4}
+        func=mdp.joint_reqularization_potential, weight=0.4, params={"sigma": 0.4}
     )
 
     foot_symmetry_height = RewTerm(
-        func=mdp.foot_ref_height, weight=0.5,
-        params={"target_height": 0.18, "frequency": 1.5, "sigma": 0.17 },
+        func=mdp.foot_ref_height, weight=2.0,
+        params={"target_height": 0.18, "frequency": 2.0, "sigma": 0.17 },
     )
 
     knee_limit_lower = RewTerm(
@@ -300,7 +300,7 @@ class K1Rewards:
 
     joint_torque = RewTerm(
         func=mdp.joint_torques_l2, 
-        weight=-5e-5, 
+        weight=-3e-5, 
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Ankle_.*", ".*_Hip_.*", ".*_Knee_.*"])}
     )
 
@@ -310,7 +310,7 @@ class K1Rewards:
     )
 
     feet_y_distance = RewTerm(
-        func=mdp.feet_y_distance, weight=-2.0,
+        func=mdp.feet_y_distance, weight=2.0,
         params={"feet_distance_ref": 0.2}
     )
 
@@ -327,7 +327,7 @@ class K1Rewards:
     )
 
     action_rate_l2 = RewTerm(
-        func=mdp.action_rate_l2, weight=-1e-3
+        func=mdp.action_rate_l2, weight=-1e-4
     )
 
     second_order_action_rate = RewTerm(
@@ -340,18 +340,18 @@ class K1Rewards:
         params={
             "command_name": "base_velocity",
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
-            "threshold": 0.7,
+            "threshold": 0.5,
         },
     )
 
-    # feet_slide = RewTerm(
-    #     func=mdp.feet_slide,
-    #     weight=-0.1,
-    #     params={
-    #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
-    #         "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot_link"),
-    #     },
-    # )
+    feet_slide = RewTerm(
+        func=mdp.feet_slide,
+        weight=-0.8,
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot_link"),
+        },
+    )
 
 @configclass
 class EventCfg:
@@ -450,7 +450,15 @@ class CurriculumCfg:
     """Curriculum terms for the MDP."""
     terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
     foot_height_weights = CurrTerm(func=mdp.modify_reward_weight,
-                                   params= {"term_name": "foot_symmetry_height", "weight": 1.0, "num_steps": 10000} )
+                                   params= {"term_name": "foot_symmetry_height", "weight": 5.0, "num_steps": 15000} )
+    air_time_weights = CurrTerm(
+        func=mdp.modify_reward_weight,
+        params={
+            "term_name": "feet_air_time",
+            "weight": 5.0,      # 1.6 → 5.0
+            "num_steps": 15000
+        }
+    )
 
 @configclass
 class K1RoughEnvCfg(ManagerBasedRLEnvCfg):

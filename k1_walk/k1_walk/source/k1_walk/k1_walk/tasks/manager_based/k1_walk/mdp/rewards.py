@@ -316,9 +316,21 @@ def feet_distance(env: ManagerBasedRLEnv, feet_distance_ref = 0.3) -> torch.Tens
 
     return torch.clip(feet_distance_ref - feet_distance, min=0.0, max=0.1)
 
-def feet_y_distance(env: ManagerBasedRLEnv, feet_distance_ref = 0.3) -> torch.Tensor:
-    y_offset = torch.abs(get_feet_offset(env, feet_distance_ref)[1])
-    return torch.clip(y_offset, min=0.0, max=0.1)
+def feet_y_distance(env: ManagerBasedRLEnv, feet_distance_ref = 0.3,sigma = 0.5, discount_factor = 0.99 ) -> torch.Tensor:
+    y_offset = torch.square(get_feet_offset(env, feet_distance_ref)[1])
+    y_offset_reward = torch.exp(-y_offset / sigma)
+    # send_data_stream({"y_offset": y_offset[0]})
+    buffer_key = "feet_y_distance_potential_prev"
+    if not hasattr(env, "_custom_buffers"):
+        env._custom_buffers = {}
+    if buffer_key not in env._custom_buffers:
+        env._custom_buffers[buffer_key] = y_offset_reward.clone()
+    prev_potential = env._custom_buffers[buffer_key]
+    shaped_reward = discount_factor * y_offset_reward - prev_potential
+    reset_mask = env.reset_buf > 0
+    shaped_reward = torch.where(reset_mask, torch.zeros_like(shaped_reward), shaped_reward)
+    env._custom_buffers[buffer_key] = y_offset_reward.clone()
+    return shaped_reward
 
 def get_feet_offset(env: ManagerBasedRLEnv, feet_distance_ref = 0.3) -> torch.Tensor:
     """Get the offset between left and right foot in the robot frame.
