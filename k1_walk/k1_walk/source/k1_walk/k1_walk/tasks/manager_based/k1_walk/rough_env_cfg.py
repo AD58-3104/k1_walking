@@ -35,11 +35,11 @@ import math
 
 from pathlib import Path
 
-PROJECT_HOME_DIR = Path.home() / "k1_walking"
+PROJECT_HOME_DIR = Path.home() / "k1_walking" / "K1_locomotion"
 
 BOOSTER_K1_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
-        usd_path=f"{PROJECT_HOME_DIR}/k1.usd",
+        usd_path=f"{PROJECT_HOME_DIR}/K1_locomotion.usd",
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
@@ -56,18 +56,18 @@ BOOSTER_K1_CFG = ArticulationCfg(
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         # pos=(0.0, 0.0, 0.72 - 0.0841),
-        pos=(0.0, 0.0, 0.7),
+        pos=(0.0, 0.0, 0.60),
         joint_pos={
-            "AAHead_Yaw" : 0.9, 
-            "Head_Pitch" : 0.0, 
-            "ALeft_Shoulder_Pitch" : 0.0, 
-            "ARight_Shoulder_Pitch" : 0.0,   # ここはラジアンで指定するっぽい
-            "Left_Shoulder_Roll" : 0.0, #-0.7853981634,  # 地面に対して水平が0度なので、内側に動かすで正しい？ 
-            "Left_Elbow_Pitch" : 0.0, 
-            "Left_Elbow_Yaw" : 0.0, 
-            "Right_Shoulder_Roll" : 0.0, #0.7853981634, 
-            "Right_Elbow_Pitch" : 0.0, 
-            "Right_Elbow_Yaw" : 0.0, 
+            # "AAHead_Yaw" : 0.0,   # K1_locomotionにはこの辺がないのでコメントアウト
+            # "Head_Pitch" : 0.0, 
+            # "ALeft_Shoulder_Pitch" : 0.0, 
+            # "ARight_Shoulder_Pitch" : 0.0,   # ここはラジアンで指定するっぽい
+            # "Left_Shoulder_Roll" : 0.0, #-0.7853981634,  # 地面に対して水平が0度なので、内側に動かすで正しい？ 
+            # "Left_Elbow_Pitch" : 0.0, 
+            # "Left_Elbow_Yaw" : 0.0, 
+            # "Right_Shoulder_Roll" : 0.0, #0.7853981634, 
+            # "Right_Elbow_Pitch" : 0.0, 
+            # "Right_Elbow_Yaw" : 0.0, 
 
             "Left_Hip_Pitch" : -0.2, 
             "Left_Hip_Roll" : 0.0, 
@@ -90,20 +90,20 @@ BOOSTER_K1_CFG = ArticulationCfg(
         "legs": IdealPDActuatorCfg(
             joint_names_expr=[".*_Hip_.*", ".*_Knee_.*", ".*_Ankle_.*"],
             effort_limit_sim={
-                ".*Hip_Pitch.*" : 45.0,
-                ".*Hip_Roll": 30.0,
-                ".*Hip_Yaw.*": 30.0,
-                ".*_Knee_Pitch": 60.0,
-                ".*_Ankle_Pitch": 24.0,
+                ".*Hip_Pitch.*" : 30.0,
+                ".*Hip_Roll": 20.0,
+                ".*Hip_Yaw.*": 20.0,
+                ".*_Knee_Pitch": 40.0,
+                ".*_Ankle_Pitch": 20.0,
                 ".*_Ankle_Roll": 15.0,
             },
             velocity_limit_sim={
-                ".*Hip_Pitch.*" : 12.5, #rad/s
-                ".*Hip_Roll": 10.9,
-                ".*Hip_Yaw.*": 10.9,
-                ".*_Knee_Pitch": 11.7,
-                ".*_Ankle_Pitch": 18.8,
-                ".*_Ankle_Roll": 12.4,
+                ".*Hip_Pitch.*" : 18.0, #rad/s
+                ".*Hip_Roll": 18.0,
+                ".*Hip_Yaw.*": 18.0,
+                ".*_Knee_Pitch": 18.0,
+                ".*_Ankle_Pitch": 18.0,
+                ".*_Ankle_Roll": 18.0,
             },
             stiffness={
                 ".*Hip_Yaw.*": 200.0,
@@ -113,32 +113,32 @@ BOOSTER_K1_CFG = ArticulationCfg(
                 ".*_Ankle_.*": 50.0,
             },
             damping={
-                ".*Hip_Yaw.*": 5.0,
-                ".*Hip_Roll": 5.0,
-                ".*Hip_Pitch.*": 5.0,
-                ".*_Knee_Pitch": 5.0,
+                ".*Hip_Yaw.*": 2.0,
+                ".*Hip_Roll": 2.0,
+                ".*Hip_Pitch.*": 2.0,
+                ".*_Knee_Pitch": 2.0,
                 ".*_Ankle_.*": 1.0,
             },
         ),
-        "arms": IdealPDActuatorCfg(
-            joint_names_expr=[
-                ".*_Shoulder_Pitch",
-                ".*_Shoulder_Roll",
-                ".*_Elbow_Pitch",
-                ".*_Elbow_Yaw",
-            ],
-            effort_limit=100,
-            velocity_limit=50.0,
-            stiffness=40.0,
-            damping=10.0,
-        ),
-        "bodies": IdealPDActuatorCfg(
-            joint_names_expr=["AAHead_Yaw", "Head_Pitch"],
-            effort_limit=100.0,
-            velocity_limit=100.0,
-            stiffness=100.0,
-            damping=10.0,
-        )
+        # "arms": IdealPDActuatorCfg(    # K1_locomotionには無いのでコメントアウト
+        #     joint_names_expr=[
+        #         ".*_Shoulder_Pitch",
+        #         ".*_Shoulder_Roll",
+        #         ".*_Elbow_Pitch",
+        #         ".*_Elbow_Yaw",
+        #     ],
+        #     effort_limit=100,
+        #     velocity_limit=50.0,
+        #     stiffness=40.0,
+        #     damping=10.0,
+        # ),
+        # "bodies": IdealPDActuatorCfg(
+        #     joint_names_expr=["AAHead_Yaw", "Head_Pitch"],
+        #     effort_limit=100.0,
+        #     velocity_limit=100.0,
+        #     stiffness=100.0,
+        #     damping=10.0,
+        # )
     },
 )
 
@@ -250,7 +250,9 @@ class ObservationsCfg:
                 },
             )
         velocity_commands = ObsTerm(func=mdp.generated_commands, params={"command_name": "base_velocity"})
-        clock_phase = ObsTerm(func=mdp.clock_phase, params={"frequency": 2.0})
+        last_action = ObsTerm(func=mdp.last_action)
+        phase_time = ObsTerm(func=mdp.phase_time)
+        sincos_phase = ObsTerm(func=mdp.sincos_phase)
 
         def __post_init__(self):
             self.enable_corruption = True
@@ -276,21 +278,25 @@ class K1Rewards:
         func=mdp.track_ang_vel_z_world_exp, weight=3.0, params={"command_name": "base_velocity", "std": 0.25}
     )
 
+    foot_clearance_ji = RewTerm(
+        func=mdp.foot_clearance_ji, weight=5.0,
+    )
+    
+    feet_height_bezier = RewTerm(
+        func=mdp.feet_height_bezier, weight=15.0,
+        params={"sigma": 0.25},
+    )
+
     height_potential = RewTerm(
-        func=mdp.robot_height_potential, weight=20.0, params={"target_height": 0.45, "sigma": 0.2, "discount_factor": 0.99}
+        func=mdp.robot_height_potential, weight=1.0, params={"target_height": 0.45, "sigma": 0.2, "discount_factor": 0.99}
     )
 
     orientation_potential = RewTerm(
-        func=mdp.orientation_potential, weight=30.0, params={"sigma": 0.12, "discount_factor": 0.985}
+        func=mdp.orientation_potential, weight=1.0, params={"sigma": 0.2, "discount_factor": 0.985}
     )
 
     joint_reqularization_potential = RewTerm(
-        func=mdp.joint_reqularization_potential, weight=0.4, params={"sigma": 0.4}
-    )
-
-    foot_symmetry_height = RewTerm(
-        func=mdp.foot_ref_height, weight=2.0,
-        params={"target_height": 0.18, "frequency": 2.0, "sigma": 0.17 },
+        func=mdp.joint_reqularization_potential, weight=0.5, params={"sigma": 0.4}
     )
 
     knee_limit_lower = RewTerm(
@@ -304,15 +310,20 @@ class K1Rewards:
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Ankle_.*", ".*_Hip_.*", ".*_Knee_.*"])}
     )
 
-    feet_parallel_to_ground = RewTerm(
-        func=mdp.feet_parallel_to_ground, weight=2.0,
-        params={"sigma": 0.3}
-    )
+    # feet_parallel_to_ground = RewTerm(
+    #     func=mdp.feet_parallel_to_ground, weight=2.0,
+    #     params={"sigma": 0.3}
+    # )
 
-    feet_y_distance = RewTerm(
-        func=mdp.feet_y_distance, weight=2.0,
-        params={"feet_distance_ref": 0.2}
-    )
+    # feet_y_distance = RewTerm(
+    #     func=mdp.feet_y_distance, weight=2.0,
+    #     params={"feet_distance_ref": 0.17}
+    # )
+
+    # feet_clsoe_penalty = RewTerm(
+    #     func=mdp.feet_close_penalty, weight=-4.0,
+    #     params={"feet_distance_threshold": 0.17},
+    # )
 
     dof_pos_limits = RewTerm(
         func=mdp.joint_pos_limits,
@@ -335,18 +346,18 @@ class K1Rewards:
     )
 
     feet_air_time = RewTerm(
-        func=mdp.feet_air_time_positive_biped,
-        weight=1.6,
+        func=mdp.feet_air_time,
+        weight=1.0,
         params={
             "command_name": "base_velocity",
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
-            "threshold": 0.5,
+            "threshold": 0.4,
         },
     )
 
     feet_slide = RewTerm(
         func=mdp.feet_slide,
-        weight=-0.8,
+        weight=-5.0,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot_link"),
@@ -363,8 +374,8 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "static_friction_range": (0.8, 0.8),
-            "dynamic_friction_range": (0.6, 0.6),
+            "static_friction_range": (0.95, 1.0),
+            "dynamic_friction_range": (0.95, 1.0),
             "restitution_range": (0.0, 0.0),
             "num_buckets": 64,
         },
@@ -400,8 +411,8 @@ class EventCfg:
                 "x": (-0.5, 0.5),
                 "y": (-0.5, 0.5),
                 "z": (-0.5, 0.5),
-                "roll": (-0.5, 0.5),
-                "pitch": (-0.5, 0.5),
+                "roll": (-0.18, 0.18),
+                "pitch": (-0.18, 0.18),
                 "yaw": (-0.5, 0.5),
             },
         },
@@ -432,31 +443,35 @@ class TerminationsCfg:
     
     base_contact = DoneTerm(
         func=mdp.illegal_contact,
-        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names="trunk_link"), "threshold": 1.0},
+        params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names="Trunk"), "threshold": 1.0},
     )
 
     root_height_low = DoneTerm(
         func=mdp.root_height_below_minimum,
-        params={"asset_cfg": SceneEntityCfg("robot", body_names="trunk_link"), "minimum_height": 0.4},
+        params={"asset_cfg": SceneEntityCfg("robot", body_names="Trunk"), "minimum_height": 0.4},
     )
 
     bad_orientation = DoneTerm(
         func=mdp.bad_orientation,
-        params={"limit_angle": 0.1},
+        params={"limit_angle": 0.2},
     )
 
 @configclass
 class CurriculumCfg:
     """Curriculum terms for the MDP."""
     terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
-    foot_height_weights = CurrTerm(func=mdp.modify_reward_weight,
-                                   params= {"term_name": "foot_symmetry_height", "weight": 5.0, "num_steps": 15000} )
-    air_time_weights = CurrTerm(
+    foot_height_weights = CurrTerm(
+        func=mdp.modify_reward_weight,
+        params= {
+            "term_name": "foot_clearance_ji",
+            "weight": 10.0,
+            "num_steps": 12000} )
+    bezier_height_cur = CurrTerm(
         func=mdp.modify_reward_weight,
         params={
-            "term_name": "feet_air_time",
-            "weight": 5.0,      # 1.6 → 5.0
-            "num_steps": 15000
+            "term_name": "feet_height_bezier",
+            "weight": 10.0,
+            "num_steps": 12000
         }
     )
 
@@ -491,7 +506,7 @@ class K1RoughEnvCfg(ManagerBasedRLEnvCfg):
         self.events.push_robot = None
         self.events.add_base_mass = None
         self.events.reset_robot_joints.params["position_range"] = (1.0, 1.0)
-        self.events.base_external_force_torque.params["asset_cfg"].body_names = ["trunk_link"]
+        self.events.base_external_force_torque.params["asset_cfg"].body_names = ["Trunk"]
         self.events.reset_base.params = {
             "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (-3.14, 3.14)},
             "velocity_range": {
@@ -509,7 +524,7 @@ class K1RoughEnvCfg(ManagerBasedRLEnvCfg):
         self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
 
         # terminations
-        self.terminations.base_contact.params["sensor_cfg"].body_names = "trunk_link"
+        self.terminations.base_contact.params["sensor_cfg"].body_names = "Trunk"
 
 
 @configclass

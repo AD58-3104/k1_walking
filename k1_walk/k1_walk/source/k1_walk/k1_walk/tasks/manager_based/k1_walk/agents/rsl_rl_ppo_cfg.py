@@ -28,7 +28,7 @@ class G1RoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         entropy_coef=0.008,
         num_learning_epochs=5,
         num_mini_batches=4,
-        learning_rate=1.0e-3,
+        learning_rate=0.0003,
         schedule="adaptive",
         gamma=0.99,
         lam=0.95,
@@ -42,7 +42,7 @@ class G1FlatPPORunnerCfg(G1RoughPPORunnerCfg):
     def __post_init__(self):
         super().__post_init__()
 
-        self.max_iterations = 7000
+        self.max_iterations = 7200
         self.experiment_name = "k1_rsl"
-        self.policy.actor_hidden_dims = [256, 128, 128]
-        self.policy.critic_hidden_dims = [256, 128, 128]
+        self.policy.actor_hidden_dims = [256, 256, 128]
+        self.policy.critic_hidden_dims = [256, 256, 128]

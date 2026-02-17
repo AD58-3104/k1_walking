@@ -18,6 +18,7 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.sensors import ContactSensor
 from isaaclab.utils.math import quat_rotate_inverse, yaw_quat, euler_xyz_from_quat
 from .data_logger import send_data_stream
+from .observations import phase_time
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
@@ -203,7 +204,7 @@ def second_order_action_rate(env: ManagerBasedRLEnv) -> torch.Tensor:
     return torch.sum(torch.square((env.action_manager.action - 2 * env.action_manager.prev_action + prev_prev_action) / env.step_dt), dim=1)
 
 
-def foot_ref_height(env: ManagerBasedRLEnv, target_height: float = 0.2,frequency = 1.5 , sigma: float = 0.5) -> torch.Tensor:
+def foot_ref_height(env: ManagerBasedRLEnv, target_height: float = 0.2,frequency = 1.5 , sigma: float = 0.5, min_height: float = 0.02) -> torch.Tensor:
     
     # 初期化時にepisode_length_bufが存在しない場合はゼロ配列を使用
     if hasattr(env, 'episode_length_buf'):
@@ -219,8 +220,8 @@ def foot_ref_height(env: ManagerBasedRLEnv, target_height: float = 0.2,frequency
     foot_right_height = asset.data.body_pos_w[:, asset.find_bodies("right_foot_link")[0][0], 2]
     foot_left_height = asset.data.body_pos_w[:, asset.find_bodies("left_foot_link")[0][0], 2]
     
-    desired_foot_right_height = target_height * torch.clamp(torch.sin(phase_right),min=0.0)  # 0以下は単に0にする
-    desired_foot_left_height = target_height * torch.clamp(torch.sin(phase_left),min=0.0)
+    desired_foot_right_height = torch.clamp(target_height * torch.clamp(torch.sin(phase_right),min=0.0),min=min_height)  # 0以下は単に0にする
+    desired_foot_left_height = torch.clamp(target_height * torch.clamp(torch.sin(phase_left),min=0.0),min=min_height)
 
     right_foot_height_error = torch.square(foot_right_height - desired_foot_right_height)
     left_foot_height_error = torch.square(foot_left_height - desired_foot_left_height)
@@ -228,6 +229,13 @@ def foot_ref_height(env: ManagerBasedRLEnv, target_height: float = 0.2,frequency
     total_height_error = right_foot_height_error + left_foot_height_error
 
     shaped_reward = torch.exp(-total_height_error / sigma)
+
+    # send_data_stream({"foot_right_height": foot_right_height[0],
+    #                   "foot_left_height": foot_left_height[0],
+    #                     "desired_foot_right_height": desired_foot_right_height[0],
+    #                     "desired_foot_left_height": desired_foot_left_height[0],
+    #                     "reward": shaped_reward[0],
+    #                   })
 
     return shaped_reward
 
@@ -301,24 +309,11 @@ def joint_reqularization_potential(env: ManagerBasedRLEnv, sigma: float = 0.5, d
     return shaped_reward
 
 
-def feet_distance(env: ManagerBasedRLEnv, feet_distance_ref = 0.3) -> torch.Tensor:
-    """Penalize distance between feet.
-
-    This function penalizes the agent for having its feet too far apart. The reward is computed as the
-    distance between the feet positions.
-    """
-    asset = env.scene["robot"]
-    _,_,base_yaw = euler_xyz_from_quat(asset.data.root_quat_w)
-    feet_distance = torch.abs(
-        -torch.sin(base_yaw) * (asset.data.body_pos_w[:, asset.find_bodies("right_foot_link")[0][0], 0] - asset.data.body_pos_w[:, asset.find_bodies("left_foot_link")[0][0], 0])
-         + torch.cos(base_yaw) * (asset.data.body_pos_w[:, asset.find_bodies("right_foot_link")[0][0], 1] - asset.data.body_pos_w[:, asset.find_bodies("left_foot_link")[0][0], 1])
-    )
-
-    return torch.clip(feet_distance_ref - feet_distance, min=0.0, max=0.1)
-
 def feet_y_distance(env: ManagerBasedRLEnv, feet_distance_ref = 0.3,sigma = 0.5, discount_factor = 0.99 ) -> torch.Tensor:
+    y_vel_com = env.command_manager.get_command("base_velocity")[:, 1]
+    y_vel_scale = torch.exp(-torch.abs(y_vel_com) / 0.4)  # コマンドのy方向速度が大きいほど、足のy距離が目標値から乖離することを許容するためのスケーリング
     y_offset = torch.square(get_feet_offset(env, feet_distance_ref)[1])
-    y_offset_reward = torch.exp(-y_offset / sigma)
+    y_offset_reward = torch.exp(-y_offset / sigma * y_vel_scale)
     # send_data_stream({"y_offset": y_offset[0]})
     buffer_key = "feet_y_distance_potential_prev"
     if not hasattr(env, "_custom_buffers"):
@@ -336,21 +331,31 @@ def get_feet_offset(env: ManagerBasedRLEnv, feet_distance_ref = 0.3) -> torch.Te
     """Get the offset between left and right foot in the robot frame.
 
     This function computes the offset between the left and right foot positions in the robot frame.
+    TODO:これ計算あってる？
     """
     asset = env.scene["robot"]
     _,_,base_yaw = euler_xyz_from_quat(asset.data.root_quat_w)
     feet_x_offset = (
-        torch.cos(base_yaw) * (asset.data.body_pos_w[:, asset.find_bodies("right_foot_link")[0][0], 0] - asset.data.body_pos_w[:, asset.find_bodies("left_foot_link")[0][0], 0])
-         - torch.sin(base_yaw) * (asset.data.body_pos_w[:, asset.find_bodies("right_foot_link")[0][0], 1] - asset.data.body_pos_w[:, asset.find_bodies("left_foot_link")[0][0], 1])
+        torch.cos(base_yaw) * (asset.data.body_pos_w[:, asset.find_bodies("left_foot_link")[0][0], 0] - asset.data.body_pos_w[:, asset.find_bodies("right_foot_link")[0][0], 0])
+         - torch.sin(base_yaw) * (asset.data.body_pos_w[:, asset.find_bodies("left_foot_link")[0][0], 1] - asset.data.body_pos_w[:, asset.find_bodies("right_foot_link")[0][0], 1])
     )
     feet_y_offset = (
-        -torch.sin(base_yaw) * (asset.data.body_pos_w[:, asset.find_bodies("right_foot_link")[0][0], 0] - asset.data.body_pos_w[:, asset.find_bodies("left_foot_link")[0][0], 0])
-         + torch.cos(base_yaw) * (asset.data.body_pos_w[:, asset.find_bodies("right_foot_link")[0][0], 1] - asset.data.body_pos_w[:, asset.find_bodies("left_foot_link")[0][0], 1])
+        -torch.sin(base_yaw) * (asset.data.body_pos_w[:, asset.find_bodies("left_foot_link")[0][0], 0] - asset.data.body_pos_w[:, asset.find_bodies("right_foot_link")[0][0], 0])
+         + torch.cos(base_yaw) * (asset.data.body_pos_w[:, asset.find_bodies("left_foot_link")[0][0], 1] - asset.data.body_pos_w[:, asset.find_bodies("right_foot_link")[0][0], 1])
     )
 
     feet_y_offset = feet_y_offset - feet_distance_ref
     return feet_x_offset, feet_y_offset
 
+def feet_close_penalty(env: ManagerBasedRLEnv, feet_distance_threshold = 0.15) -> torch.Tensor:
+    """Penalize feet being too close.
+
+    This function penalizes the agent for having its feet too close together. The reward is computed as the
+    distance between the feet positions.
+    """
+    _, feet_y_offset = get_feet_offset(env, 0.0) # そのままの値が欲しいのでrefは0にする
+
+    return (feet_y_offset < feet_distance_threshold).float()
 
 def knee_limit_lower(env: ManagerBasedRLEnv, knee_limit_angle: float = 0.0) -> torch.Tensor:
     """Penalize knee joint limit violation.
@@ -374,7 +379,7 @@ def knee_limit_lower(env: ManagerBasedRLEnv, knee_limit_angle: float = 0.0) -> t
     return total_violation.squeeze(-1)
 
 
-def feet_parallel_to_ground(env: ManagerBasedRLEnv, sigma: float = 0.3) -> torch.Tensor:
+def feet_parallel_to_ground(env: ManagerBasedRLEnv, sigma: float = 0.3, discount_factor: float = 0.99) -> torch.Tensor:
     """Reward feet being parallel to the ground.
 
     This function rewards the agent for keeping its feet parallel to the ground.
@@ -411,6 +416,79 @@ def feet_parallel_to_ground(env: ManagerBasedRLEnv, sigma: float = 0.3) -> torch
     total_error = left_foot_error + right_foot_error
 
     # Exponential kernel reward: higher when error is smaller
-    reward = torch.exp(-total_error / sigma)
+    current_potential = torch.exp(-total_error / sigma)
 
-    return reward
+    buffer_key = "feet_parallel_to_ground_potential_prev"
+    if not hasattr(env, "_custom_buffers"):
+        env._custom_buffers = {}
+    if buffer_key not in env._custom_buffers:
+        env._custom_buffers[buffer_key] = current_potential.clone()
+    prev_potential = env._custom_buffers[buffer_key]
+    shaped_reward = discount_factor * current_potential - prev_potential
+    reset_mask = env.reset_buf > 0
+    shaped_reward = torch.where(reset_mask, torch.zeros_like(shaped_reward), shaped_reward)
+    env._custom_buffers[buffer_key] = current_potential.clone()
+
+    return shaped_reward
+
+
+
+def foot_clearance_ji(env: ManagerBasedRLEnv, target_clearance: float = 0.09) -> torch.Tensor:
+    asset = env.scene["robot"]
+
+    # Get foot body indices
+    left_foot_idx = asset.find_bodies("left_foot_link")[0][0]
+    right_foot_idx = asset.find_bodies("right_foot_link")[0][0]
+    right_foot_xy_vel_sq = torch.sqrt(torch.norm(asset.data.body_lin_vel_w[:, right_foot_idx, :2], dim=1))
+    left_foot_xy_vel_sq = torch.sqrt(torch.norm(asset.data.body_lin_vel_w[:, left_foot_idx, :2], dim=1))
+
+    right_foot_height_err = torch.square(target_clearance - asset.data.body_pos_w[:, right_foot_idx, 2])
+    left_foot_height_err = torch.square(target_clearance - asset.data.body_pos_w[:, left_foot_idx, 2])
+
+    right_reward = right_foot_height_err * right_foot_xy_vel_sq
+    left_reward = left_foot_height_err * left_foot_xy_vel_sq
+    return right_reward + left_reward
+
+
+def _expected_foot_height_bezier(phi: torch.Tensor, swing_height: float) -> torch.Tensor:
+    """Expected foot height from gait phase using a cubic Bézier profile."""
+
+    def cubic_bezier_interpolation(y_start: torch.Tensor, y_end: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+        y_diff = y_end - y_start
+        bezier = x**3 + 3 * (x**2 * (1 - x))
+        return y_start + y_diff * bezier
+
+    x = (phi + torch.pi) / (2 * torch.pi)
+    stance = cubic_bezier_interpolation(torch.zeros_like(x), torch.full_like(x, swing_height), 2 * x)
+    swing = cubic_bezier_interpolation(torch.full_like(x, swing_height), torch.zeros_like(x), 2 * x - 1)
+    return torch.where(x <= 0.5, stance, swing)
+
+def feet_height_bezier(env: ManagerBasedRLEnv, swing_height: float = 0.09, sigma: float = 0.08) -> torch.Tensor:
+    asset = env.scene["robot"]
+
+    # Get foot body indices
+    left_foot_idx = asset.find_bodies("left_foot_link")[0][0]
+    right_foot_idx = asset.find_bodies("right_foot_link")[0][0]
+
+    # Compute foot heights
+    right_foot_height = asset.data.body_pos_w[:, right_foot_idx, 2]
+    left_foot_height = asset.data.body_pos_w[:, left_foot_idx, 2]
+
+    phase = phase_time(env)
+    rz_left = _expected_foot_height_bezier(phase[:, 0], swing_height)
+    rz_right = _expected_foot_height_bezier(phase[:, 1], swing_height)
+
+    send_data_stream({"rz_left": rz_left[0],
+                      "rz_right": rz_right[0],
+                      "left_foot_height": left_foot_height[0],
+                      "right_foot_height": right_foot_height[0],
+                      })
+
+    # Calculate height tracking errors
+    error_left = torch.square(left_foot_height - rz_left)
+    error_right = torch.square(right_foot_height - rz_right)
+
+    # Combine errors and apply exponential reward
+    total_error = error_left + error_right
+
+    return torch.exp(-total_error / sigma)

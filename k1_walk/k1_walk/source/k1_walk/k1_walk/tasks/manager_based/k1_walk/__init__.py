@@ -33,6 +33,16 @@ gym.register(
 )
 
 gym.register(
+    id="K1-Walk-Train-fast-sac",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.k1_walk_env_cfg:K1FlatEnvCfg",
+        "fast_sac_cfg_entry_point": f"{agents.__name__}.fast_sac_cfg:K1FastSacRunnerCfg",
+    },
+)
+
+gym.register(
     id="K1-Walk-Play",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
     disable_env_checker=True,
@@ -49,5 +59,15 @@ gym.register(
     kwargs={
         "env_cfg_entry_point": f"{__name__}.k1_walk_env_cfg:K1FlatEnvCfg_PLAY",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:G1FlatPPORunnerCfg",
+    },
+)
+
+gym.register(
+    id="K1-Walk-Play-fast-sac",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.k1_walk_env_cfg:K1FlatEnvCfg_PLAY",
+        "fast_sac_cfg_entry_point": f"{agents.__name__}.fast_sac_cfg:K1FastSacRunnerCfg",
     },
 )

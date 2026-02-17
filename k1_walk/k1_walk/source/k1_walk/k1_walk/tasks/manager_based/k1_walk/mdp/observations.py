@@ -93,3 +93,52 @@ def clock_phase(env: ManagerBasedRLEnv, frequency: float = 1.0) -> torch.Tensor:
     combine_phase = sin_phase / 2 * torch.sqrt(torch.square(sin_phase) + 0.04) + 0.5  # (num_envs, 1)
 
     return torch.cat([sin_phase, cos_phase, combine_phase], dim=-1)  # (num_envs, 3)
+
+
+def phase_time(env: ManagerBasedRLEnv, frequency: float = 1.2, phase_offset: float = torch.pi) -> torch.Tensor:
+    """
+    Args:
+        env: 環境インスタンス
+        frequency: 歩行の周期(Hz)
+
+    Returns:
+        torch.Tensor: shape (num_envs, 2) の観測値
+            - [phase1, phase2]: 位相 (0から2πの範囲)
+    """
+    if hasattr(env, 'episode_length_buf'):
+        ep_len = env.episode_length_buf.float()
+    else:
+        ep_len = torch.zeros(env.num_envs, device=env.device, dtype=torch.float)
+    phase_dt = 2 * torch.pi * env.step_dt * frequency
+    offset = torch.tensor([0.0, phase_offset], device=env.device)
+    phase_tp1 = ep_len.unsqueeze(-1) * phase_dt + offset
+    phase = torch.fmod(phase_tp1 + torch.pi, 2 * torch.pi) - torch.pi
+
+    commands = env.command_manager.get_command("base_velocity")
+    stand_mask = torch.logical_and(
+        torch.linalg.norm(commands[:, :2], dim=1) < 0.01,
+        torch.abs(commands[:, 2]) < 0.01,
+    )
+    if stand_mask.any():
+        # 立ち止まっている時は位相を0にする
+        phase[stand_mask] = torch.full((int(stand_mask.sum().item()), 2), 0.0, device=env.device)
+
+    return phase
+
+def sincos_phase(env: ManagerBasedRLEnv) -> torch.Tensor:
+    """
+    Args:
+        env: 環境インスタンス
+        frequency: 歩行の周期.一回の歩行に掛かる時間
+
+    Returns:
+        torch.Tensor: shape (num_envs, 4) の観測値
+            - [:, 0:2]: sin(phase) for each phase
+            - [:, 2:4]: cos(phase) for each phase
+    """
+    phase = phase_time(env)  # (num_envs, 2)
+
+    sin_phase = torch.sin(phase)  # (num_envs, 2)
+    cos_phase = torch.cos(phase)  # (num_envs, 2)
+
+    return torch.cat([sin_phase, cos_phase], dim=-1)  # (num_envs, 4)
