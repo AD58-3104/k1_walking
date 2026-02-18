@@ -95,7 +95,7 @@ def clock_phase(env: ManagerBasedRLEnv, frequency: float = 1.0) -> torch.Tensor:
     return torch.cat([sin_phase, cos_phase, combine_phase], dim=-1)  # (num_envs, 3)
 
 
-def phase_time(env: ManagerBasedRLEnv, frequency: float = 1.2, phase_offset: float = torch.pi) -> torch.Tensor:
+def phase_time(env: ManagerBasedRLEnv, frequency: float = 1.6, phase_offset: float = torch.pi) -> torch.Tensor:
     """
     Args:
         env: 環境インスタンス
@@ -142,3 +142,18 @@ def sincos_phase(env: ManagerBasedRLEnv) -> torch.Tensor:
     cos_phase = torch.cos(phase)  # (num_envs, 2)
 
     return torch.cat([sin_phase, cos_phase], dim=-1)  # (num_envs, 4)
+
+
+def foot_height(env: ManagerBasedRLEnv, foot_cfg_right: SceneEntityCfg, foot_cfg_left: SceneEntityCfg) -> torch.Tensor:
+    """
+    足の高さを観測として取得する(両脚分)
+
+    Returns:
+        torch.Tensor: shape (num_envs, 2) の観測値
+            - [:, 0]: 右足の高さ
+            - [:, 1]: 左足の高さ
+    """
+    asset = env.scene[SceneEntityCfg("robot").name]
+    foot_height_right = asset.data.body_com_pos_w[:, foot_cfg_right.body_ids, 2]  # (num_envs, 1)
+    foot_height_left = asset.data.body_com_pos_w[:, foot_cfg_left.body_ids, 2]  # (num_envs, 1)
+    return torch.cat([foot_height_right, foot_height_left], dim=-1)  # (num_envs, 2)

@@ -201,6 +201,7 @@ def second_order_action_rate(env: ManagerBasedRLEnv) -> torch.Tensor:
         env._custom_buffers[buffer_key] = env.action_manager.action.clone()
     prev_prev_action = env._custom_buffers[buffer_key]
     env._custom_buffers[buffer_key] = env.action_manager.prev_action.clone()
+    # send_data_stream({"action_rate": torch.sum(torch.square(env.action_manager.action - env.action_manager.prev_action),dim=1)[0]})
     return torch.sum(torch.square((env.action_manager.action - 2 * env.action_manager.prev_action + prev_prev_action) / env.step_dt), dim=1)
 
 
@@ -415,7 +416,6 @@ def feet_parallel_to_ground(env: ManagerBasedRLEnv, sigma: float = 0.3, discount
     # Total error for both feet
     total_error = left_foot_error + right_foot_error
 
-    # Exponential kernel reward: higher when error is smaller
     current_potential = torch.exp(-total_error / sigma)
 
     buffer_key = "feet_parallel_to_ground_potential_prev"
@@ -450,20 +450,33 @@ def foot_clearance_ji(env: ManagerBasedRLEnv, target_clearance: float = 0.09) ->
     return right_reward + left_reward
 
 
-def _expected_foot_height_bezier(phi: torch.Tensor, swing_height: float) -> torch.Tensor:
-    """Expected foot height from gait phase using a cubic Bézier profile."""
+def _expected_foot_height_bezier(phi: torch.Tensor, swing_height: float, stance_ratio: float = 0.5) -> torch.Tensor:
+    """Expected foot height from gait phase using a cubic Bézier profile.
+
+    Args:
+        phi: Gait phase in [-pi, pi].
+        swing_height: Peak foot height during swing [m].
+        stance_ratio: Fraction of the cycle spent in stance (foot on ground).
+                      e.g. 0.6 means 60% stance, 40% swing.
+    """
 
     def cubic_bezier_interpolation(y_start: torch.Tensor, y_end: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
         y_diff = y_end - y_start
         bezier = x**3 + 3 * (x**2 * (1 - x))
         return y_start + y_diff * bezier
 
-    x = (phi + torch.pi) / (2 * torch.pi)
-    stance = cubic_bezier_interpolation(torch.zeros_like(x), torch.full_like(x, swing_height), 2 * x)
-    swing = cubic_bezier_interpolation(torch.full_like(x, swing_height), torch.zeros_like(x), 2 * x - 1)
-    return torch.where(x <= 0.5, stance, swing)
+    x = (phi + torch.pi) / (2 * torch.pi)  # x ∈ [0, 1]
 
-def feet_height_bezier(env: ManagerBasedRLEnv, swing_height: float = 0.09, sigma: float = 0.08) -> torch.Tensor:
+    # Normalize to swing phase: t ∈ [0, 1] only during swing; clamped to 0 during stance
+    t = torch.clamp((x - stance_ratio) / (1.0 - stance_ratio), 0.0, 1.0)
+
+    up   = cubic_bezier_interpolation(torch.zeros_like(t), torch.full_like(t, swing_height), 2 * t)
+    down = cubic_bezier_interpolation(torch.full_like(t, swing_height), torch.zeros_like(t), 2 * t - 1)
+    profile = torch.where(t <= 0.5, up, down)
+
+    return torch.where(x <= stance_ratio, torch.zeros_like(x), profile)
+
+def feet_height_bezier(env: ManagerBasedRLEnv, swing_height: float = 0.09, sigma: float = 0.08, stance_ratio: float = 0.6) -> torch.Tensor:
     asset = env.scene["robot"]
 
     # Get foot body indices
@@ -475,14 +488,31 @@ def feet_height_bezier(env: ManagerBasedRLEnv, swing_height: float = 0.09, sigma
     left_foot_height = asset.data.body_pos_w[:, left_foot_idx, 2]
 
     phase = phase_time(env)
-    rz_left = _expected_foot_height_bezier(phase[:, 0], swing_height)
-    rz_right = _expected_foot_height_bezier(phase[:, 1], swing_height)
+    rz_left = _expected_foot_height_bezier(phase[:, 0], swing_height, stance_ratio)
+    rz_right = _expected_foot_height_bezier(phase[:, 1], swing_height, stance_ratio)
 
-    send_data_stream({"rz_left": rz_left[0],
-                      "rz_right": rz_right[0],
-                      "left_foot_height": left_foot_height[0],
-                      "right_foot_height": right_foot_height[0],
-                      })
+    # 歩行コマンドが非常に小さい時は目標高さは0にする（足を上げない歩行も許容する）
+    command_lin_vel = env.command_manager.get_command("base_velocity")[:, :2]
+    command_speed = torch.norm(command_lin_vel, dim=1)
+    rz_left = torch.where(command_speed > 0.1, rz_left, torch.zeros_like(rz_left))
+    rz_right = torch.where(command_speed > 0.1, rz_right, torch.zeros_like(rz_right))
+
+
+    # send_data_stream({
+    #     "knee_torque": asset.data.applied_torque[:, asset.find_joints(".*_Knee_.*")[0]].tolist(),
+    #     "hip_torque": asset.data.applied_torque[:, asset.find_joints(".*_Hip_.*")[0]].tolist(),
+    #     "ankle_torque": asset.data.applied_torque[:, asset.find_joints(".*_Ankle_.*")[0]].tolist(),
+    # })
+    # send_data_stream({
+    #     "knee_vel": asset.data.joint_vel[:, asset.find_joints(".*_Knee_.*")[0]].tolist(),
+    #     "hip_vel": asset.data.joint_vel[:, asset.find_joints(".*_Hip_.*")[0]].tolist(),
+    #     "ankle_vel": asset.data.joint_vel[:, asset.find_joints(".*_Ankle_.*")[0]].tolist(),
+    # })
+    # send_data_stream({
+    #     "knee_acc": asset.data.joint_acc[:, asset.find_joints(".*_Knee_.*")[0]].tolist(),
+    #     "hip_acc": asset.data.joint_acc[:, asset.find_joints(".*_Hip_.*")[0]].tolist(),
+    #     "ankle_acc": asset.data.joint_acc[:, asset.find_joints(".*_Ankle_.*")[0]].tolist(),
+    # })
 
     # Calculate height tracking errors
     error_left = torch.square(left_foot_height - rz_left)
@@ -490,5 +520,13 @@ def feet_height_bezier(env: ManagerBasedRLEnv, swing_height: float = 0.09, sigma
 
     # Combine errors and apply exponential reward
     total_error = error_left + error_right
+    # send_data_stream({"rz_left": rz_left[0],
+    #                   "rz_right": rz_right[0],
+    #                   "left_foot_height": left_foot_height[0],
+    #                   "right_foot_height": right_foot_height[0],
+    #                   "error_left": error_left[0],
+    #                   "error_right": error_right[0],
+    #                   "reward": torch.exp(-total_error / sigma)[0],
+    #                   })
 
     return torch.exp(-total_error / sigma)

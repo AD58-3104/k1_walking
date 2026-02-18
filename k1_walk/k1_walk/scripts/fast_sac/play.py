@@ -41,6 +41,7 @@ args_cli = parser.parse_args()
 # always enable cameras to record video
 if args_cli.video:
     args_cli.enable_cameras = True
+    args_cli.headless = True
 
 # launch omniverse app
 app_launcher = AppLauncher(args_cli)
