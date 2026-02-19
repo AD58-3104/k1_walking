@@ -240,7 +240,7 @@ def foot_ref_height(env: ManagerBasedRLEnv, target_height: float = 0.2,frequency
 
     return shaped_reward
 
-def joint_reqularization_potential(env: ManagerBasedRLEnv, sigma: float = 0.5, discount_factor: float = 0.99) -> torch.Tensor:
+def joint_reqularization_potential(env: ManagerBasedRLEnv, sigma: float = 0.5, discount_factor: float = 0.99, pitch_slack: float = 1.0) -> torch.Tensor:
     """Regularization potential for joint positions.
 
     This function encourages:
@@ -254,6 +254,7 @@ def joint_reqularization_potential(env: ManagerBasedRLEnv, sigma: float = 0.5, d
         env: Environment instance
         sigma: Exponential kernel width parameter
         discount_factor: Discount factor for potential-based shaping
+        pitch_slack: ピッチに掛けるペナルティを緩和するためのスラック変数
 
     Returns:
         torch.Tensor: Shaped reward for joint regularization
@@ -291,8 +292,8 @@ def joint_reqularization_potential(env: ManagerBasedRLEnv, sigma: float = 0.5, d
     # - Pitch: penalize deviation from default for each leg independently
     # - Roll: penalize left-right asymmetry
     # - Yaw: penalize deviation from default
-    current_potential = torch.exp(-(torch.square(joint_pos_left_p)) / sigma).sum(dim=1) + \
-                            torch.exp(-(torch.square(joint_pos_right_p)) / sigma).sum(dim=1) + \
+    current_potential = torch.exp(-(torch.square(joint_pos_left_p * pitch_slack)) / sigma).sum(dim=1) + \
+                            torch.exp(-(torch.square(joint_pos_right_p * pitch_slack)) / sigma).sum(dim=1) + \
                             torch.exp(-(torch.square(joint_pos_r)) / sigma).sum(dim=1) + \
                             torch.exp(-(torch.square(joint_pos_yr)) / sigma).sum(dim=1) + \
                             torch.exp(-(torch.square(joint_pos_yl)) / sigma).sum(dim=1)
@@ -527,6 +528,113 @@ def feet_height_bezier(env: ManagerBasedRLEnv, swing_height: float = 0.09, sigma
     #                   "error_left": error_left[0],
     #                   "error_right": error_right[0],
     #                   "reward": torch.exp(-total_error / sigma)[0],
+    #                   "right_foot_vel": torch.norm(asset.data.body_lin_vel_w[:, right_foot_idx, :2], dim=1)[0],
+    #                     "left_foot_vel": torch.norm(asset.data.body_lin_vel_w[:, left_foot_idx, :2], dim=1)[0],
     #                   })
 
     return torch.exp(-total_error / sigma)
+
+
+def stride_length_reward(
+    env: ManagerBasedRLEnv,
+    command_name: str,
+    sensor_cfg: SceneEntityCfg,
+    max_stride: float = 0.3,
+    max_speed: float = 1.0,
+    sigma: float = 0.1,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Reward for achieving target stride length scaled by velocity command.
+
+    Stride length is measured as the xy-distance (norm) that each foot travels
+    between consecutive ground contacts. The target stride scales linearly with
+    the commanded velocity: target = max_stride * (command_speed / max_speed).
+
+    Args:
+        env: Environment instance
+        command_name: Name of the velocity command
+        sensor_cfg: Configuration for the contact sensor (should include both feet)
+        max_stride: Maximum target stride length at max speed [m]
+        max_speed: Maximum expected velocity command [m/s]
+        sigma: Exponential kernel width parameter
+        asset_cfg: Asset configuration (default: robot)
+
+    Returns:
+        torch.Tensor: Reward value for each environment
+    """
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    asset = env.scene[asset_cfg.name]
+
+    # Get velocity command and compute speed ratio
+    command_vel_xy = env.command_manager.get_command(command_name)[:, :2]
+    command_speed = torch.norm(command_vel_xy, dim=1)
+    speed_ratio = torch.clamp(command_speed / max_speed, min=0.0, max=1.0)
+
+    # Scale target stride by speed ratio
+    target_stride = max_stride * speed_ratio
+
+    # Get foot body indices
+    left_foot_idx = asset.find_bodies("left_foot_link")[0][0]
+    right_foot_idx = asset.find_bodies("right_foot_link")[0][0]
+
+    # Get current foot positions (xy only)
+    left_foot_pos_xy = asset.data.body_pos_w[:, left_foot_idx, :2]
+    right_foot_pos_xy = asset.data.body_pos_w[:, right_foot_idx, :2]
+
+    # Detect first contact (foot just landed)
+    first_contact = contact_sensor.compute_first_contact(env.step_dt)[:, sensor_cfg.body_ids]
+    # sensor_cfg.body_ids should be [left_foot, right_foot] or similar
+
+    # Initialize buffers for storing previous landing positions
+    buffer_key_left = "stride_left_foot_last_landing_pos"
+    buffer_key_right = "stride_right_foot_last_landing_pos"
+
+    if not hasattr(env, "_custom_buffers"):
+        env._custom_buffers = {}
+
+    if buffer_key_left not in env._custom_buffers:
+        env._custom_buffers[buffer_key_left] = left_foot_pos_xy.clone()
+    if buffer_key_right not in env._custom_buffers:
+        env._custom_buffers[buffer_key_right] = right_foot_pos_xy.clone()
+
+    prev_left_pos = env._custom_buffers[buffer_key_left]
+    prev_right_pos = env._custom_buffers[buffer_key_right]
+
+    # Calculate stride length for each foot (xy-norm)
+    left_stride = torch.norm(left_foot_pos_xy - prev_left_pos, dim=1)
+    right_stride = torch.norm(right_foot_pos_xy - prev_right_pos, dim=1)
+
+    # Compute reward based on how close stride is to target
+    # Only give reward when foot just landed (first_contact)
+    # first_contact shape: (num_envs, num_feet)
+    # Assuming body_ids[0] is left foot, body_ids[1] is right foot
+    left_contact = first_contact[:, 0] if first_contact.shape[1] > 0 else torch.zeros(env.num_envs, device=env.device, dtype=torch.bool)
+    right_contact = first_contact[:, 1] if first_contact.shape[1] > 1 else torch.zeros(env.num_envs, device=env.device, dtype=torch.bool)
+
+    # Reward: exponential of negative squared error from target stride
+    left_reward = torch.exp(-torch.square(left_stride - target_stride) / sigma) * left_contact.float()
+    right_reward = torch.exp(-torch.square(right_stride - target_stride) / sigma) * right_contact.float()
+
+    reward = left_reward + right_reward
+
+    # Update stored positions when foot lands
+    env._custom_buffers[buffer_key_left] = torch.where(
+        left_contact.unsqueeze(-1), left_foot_pos_xy, prev_left_pos
+    )
+    env._custom_buffers[buffer_key_right] = torch.where(
+        right_contact.unsqueeze(-1), right_foot_pos_xy, prev_right_pos
+    )
+
+    # Reset stored positions on environment reset
+    reset_mask = env.reset_buf > 0
+    env._custom_buffers[buffer_key_left] = torch.where(
+        reset_mask.unsqueeze(-1), left_foot_pos_xy, env._custom_buffers[buffer_key_left]
+    )
+    env._custom_buffers[buffer_key_right] = torch.where(
+        reset_mask.unsqueeze(-1), right_foot_pos_xy, env._custom_buffers[buffer_key_right]
+    )
+
+    # No reward for zero command (standing still)
+    reward *= command_speed > 0.1
+
+    return reward

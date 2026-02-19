@@ -25,7 +25,7 @@ class K1FlatEnvCfg(K1RoughEnvCfg):
         self.curriculum.terrain_levels = None
 
         # Commands
-        self.commands.base_velocity.ranges.lin_vel_x = (0.0, 1.0)
+        self.commands.base_velocity.ranges.lin_vel_x = (-1.0, 1.0)
         self.commands.base_velocity.ranges.lin_vel_y = (-0.8, 0.8)
         self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
 

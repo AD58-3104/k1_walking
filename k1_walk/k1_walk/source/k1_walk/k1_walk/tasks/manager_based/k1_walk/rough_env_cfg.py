@@ -293,8 +293,8 @@ class K1Rewards:
     # )
     
     feet_height_bezier = RewTerm(
-        func=mdp.feet_height_bezier, weight=15.0,
-        params={"sigma": 0.05},
+        func=mdp.feet_height_bezier, weight=30.0,
+        params={"sigma": 0.05,"swing_height": 0.12},
     )
 
     # feet_air_time = RewTerm(
@@ -307,17 +307,45 @@ class K1Rewards:
     #     },
     # )
 
+    stride_length = RewTerm(
+        func=mdp.stride_length_reward,
+        weight=5.0,
+        params={
+            "command_name": "base_velocity",
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
+            "max_stride": 0.3,  # 最大速度時の目標歩幅 [m]
+            "max_speed": 1.0,   # 最大速度コマンド [m/s]
+            "sigma": 0.1,       # 許容誤差幅（小さいほど厳しい）
+        },
+    )
+
     # ------------- シェイピング報酬（ポテンシャル系）
     height_potential = RewTerm(
-        func=mdp.robot_height_potential, weight=1.0, params={"target_height": 0.50, "sigma": 0.2, "discount_factor": 0.99}
+        func=mdp.robot_height_potential, 
+        weight=1.0, 
+        params={
+            "target_height": 0.50, 
+            "sigma": 0.2, 
+            "discount_factor": 0.99
+        }
     )
 
     orientation_potential = RewTerm(
-        func=mdp.orientation_potential, weight=1.0, params={"sigma": 0.2, "discount_factor": 0.985}
+        func=mdp.orientation_potential, 
+        weight=1.0, 
+        params={
+            "sigma": 0.2, 
+            "discount_factor": 0.985
+            }
     )
 
     joint_reqularization_potential = RewTerm(
-        func=mdp.joint_reqularization_potential, weight=0.5, params={"sigma": 0.4}
+        func=mdp.joint_reqularization_potential, 
+        weight=0.1,
+        params={
+            "sigma": 0.4,
+            "pitch_slack": 0.8,
+            }
     )
 
     feet_parallel_to_ground = RewTerm(
@@ -367,12 +395,12 @@ class K1Rewards:
     )
 
     second_order_action_rate = RewTerm(
-        func=mdp.second_order_action_rate, weight=-1e-3
+        func=mdp.second_order_action_rate, weight=-1e-4
     )
 
     feet_slide = RewTerm(
         func=mdp.feet_slide,
-        weight=-7.0,
+        weight=-21.0,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot_link"),
@@ -410,8 +438,8 @@ class EventCfg:
         func=mdp.randomize_rigid_body_mass,
         mode="startup",
         params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="base"),
-            "mass_distribution_params": (-5.0, 5.0),
+            "asset_cfg": SceneEntityCfg("robot", body_names="Trunk"),
+            "mass_distribution_params": (-0.5, 0.5),
             "operation": "add",
         },
     )
@@ -421,9 +449,9 @@ class EventCfg:
         func=mdp.apply_external_force_torque,
         mode="reset",
         params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="base"),
-            "force_range": (0.0, 0.0),
-            "torque_range": (-0.0, 0.0),
+            "asset_cfg": SceneEntityCfg("robot", body_names="Trunk"),
+            "force_range": (-0.3, 0.3),
+            "torque_range": (-0.3, 0.3),
         },
     )
 
@@ -436,8 +464,8 @@ class EventCfg:
                 "x": (-0.5, 0.5),
                 "y": (-0.5, 0.5),
                 "z": (-0.5, 0.5),
-                "roll": (-0.18, 0.18),
-                "pitch": (-0.18, 0.18),
+                "roll": (-0.15, 0.15),
+                "pitch": (-0.15, 0.15),
                 "yaw": (-0.5, 0.5),
             },
         },
@@ -555,8 +583,8 @@ class K1RoughEnvCfg(ManagerBasedRLEnvCfg):
         self.scene.robot = BOOSTER_K1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
 
         # Randomization
-        self.events.push_robot = None
-        self.events.add_base_mass = None
+        # self.events.push_robot = None
+        # self.events.add_base_mass = None
         self.events.reset_robot_joints.params["position_range"] = (1.0, 1.0)
         self.events.base_external_force_torque.params["asset_cfg"].body_names = ["Trunk"]
         self.events.reset_base.params = {
