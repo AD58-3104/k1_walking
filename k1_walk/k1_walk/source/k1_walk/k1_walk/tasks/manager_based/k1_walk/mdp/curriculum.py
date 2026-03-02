@@ -8,6 +8,7 @@ from isaaclab.managers import CurriculumTermCfg, ManagerTermBase
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
+import torch
 
 
 class modify_reward_weight_interval(ManagerTermBase):
@@ -37,6 +38,34 @@ class modify_reward_weight_interval(ManagerTermBase):
                 num_intervals = (env.common_step_counter - start_steps) // interval_steps
                 self._term_cfg.weight = weight + num_intervals * weight_increment
                 env.reward_manager.set_term_cfg(term_name, self._term_cfg)
+        return self._term_cfg.weight
+
+class modify_reward_weight_by_episode_length(ManagerTermBase):
+    """指定したスタートステップ以降、指定した終了ステップまで、報酬の重みを指定した値まで増加させるカリキュラム"""
+
+    def __init__(self, cfg: CurriculumTermCfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+
+        # obtain term configuration
+        term_name = cfg.params["term_name"]
+        self._term_cfg = env.reward_manager.get_term_cfg(term_name)
+        self.max_episode_length: int = env.max_episode_length
+        self.init_weight: float = self._term_cfg.weight
+        self.max_episode_length_buf = torch.zeros(env.num_envs, dtype=torch.int32, device=env.device)
+
+
+    def __call__(
+        self,
+        env: ManagerBasedRLEnv,
+        env_ids: Sequence[int],
+        term_name: str,
+        target_weight: float,
+    ) -> float:
+        self.max_episode_length_buf = torch.maximum(self.max_episode_length_buf, env.episode_length_buf)
+        average_episode_length = self.max_episode_length_buf.float().mean()
+        progress = average_episode_length / self.max_episode_length
+        self._term_cfg.weight = self.init_weight + progress * (target_weight - self.init_weight)
+        env.reward_manager.set_term_cfg(term_name, self._term_cfg)
         return self._term_cfg.weight
 
 class modify_reward_weight_incremental(ManagerTermBase):

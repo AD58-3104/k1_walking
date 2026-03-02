@@ -240,7 +240,12 @@ def foot_ref_height(env: ManagerBasedRLEnv, target_height: float = 0.2,frequency
 
     return shaped_reward
 
-def joint_reqularization_potential(env: ManagerBasedRLEnv, sigma: float = 0.5, discount_factor: float = 0.99, pitch_slack: float = 1.0) -> torch.Tensor:
+def joint_reqularization_potential(env: ManagerBasedRLEnv, sigma: float = 0.5, 
+                                    discount_factor: float = 0.99,
+                                    pitch_slack: list[float] = [1.0, 1.0, 1.0],
+                                    roll_slack: list[float] = [1.0, 1.0],
+                                    yaw_slack: float = 0.8
+                                    ) -> torch.Tensor:
     """Regularization potential for joint positions.
 
     This function encourages:
@@ -255,11 +260,18 @@ def joint_reqularization_potential(env: ManagerBasedRLEnv, sigma: float = 0.5, d
         sigma: Exponential kernel width parameter
         discount_factor: Discount factor for potential-based shaping
         pitch_slack: ピッチに掛けるペナルティを緩和するためのスラック変数
+                    [Hip_Pitch", Knee_Pitch, Ankle_Pitch] の順番
+        roll_slack: ロールに掛けるペナルティを緩和するためのスラック変数
+                    [Hip_Roll, Ankle_Roll] の順番
+        yaw_slack: ヨーに掛けるペナルティを緩和するためのスラック変数
 
     Returns:
         torch.Tensor: Shaped reward for joint regularization
     """
     asset = env.scene["robot"]
+    # テンソルに変換
+    pitch_slack = torch.tensor(pitch_slack, device=env.device)
+    roll_slack = torch.tensor(roll_slack, device=env.device)
 
     # Pitch joints (Hip, Knee, Ankle) - penalize deviation from default, NOT symmetry
     # This allows left and right legs to have different angles during walking
@@ -287,6 +299,8 @@ def joint_reqularization_potential(env: ManagerBasedRLEnv, sigma: float = 0.5, d
     asset_cfg_right_y.resolve(env.scene)
     joint_pos_yr = asset.data.joint_pos[:, asset_cfg_right_y.joint_ids] - asset.data.default_joint_pos[:, asset_cfg_right_y.joint_ids]
     joint_pos_yl = asset.data.joint_pos[:, asset_cfg_left_y.joint_ids] - asset.data.default_joint_pos[:, asset_cfg_left_y.joint_ids]
+    yaw_slack_when_rotate = torch.where(env.command_manager.get_command("base_velocity")[:, :2].norm(dim=1) > 0.1, yaw_slack, 1.0)  # コマンド速度が大きいときはyawのペナルティを緩和する
+
 
     # Compute potential:
     # - Pitch: penalize deviation from default for each leg independently
@@ -294,9 +308,18 @@ def joint_reqularization_potential(env: ManagerBasedRLEnv, sigma: float = 0.5, d
     # - Yaw: penalize deviation from default
     current_potential = torch.exp(-(torch.square(joint_pos_left_p * pitch_slack)) / sigma).sum(dim=1) + \
                             torch.exp(-(torch.square(joint_pos_right_p * pitch_slack)) / sigma).sum(dim=1) + \
-                            torch.exp(-(torch.square(joint_pos_r)) / sigma).sum(dim=1) + \
-                            torch.exp(-(torch.square(joint_pos_yr)) / sigma).sum(dim=1) + \
-                            torch.exp(-(torch.square(joint_pos_yl)) / sigma).sum(dim=1)
+                            torch.exp(-(torch.square(joint_pos_r * roll_slack)) / sigma).sum(dim=1) + \
+                            torch.exp(-(torch.square(joint_pos_yr * yaw_slack_when_rotate)) / sigma).sum(dim=1) + \
+                            torch.exp(-(torch.square(joint_pos_yl * yaw_slack_when_rotate)) / sigma).sum(dim=1)
+    
+    # send_data_stream({
+    #     "joint_pos_left_p": (torch.square(joint_pos_left_p * pitch_slack))[0],
+    #     "pos_p": joint_pos_left_p * pitch_slack,
+    #     "joint_pos_r": (torch.square(joint_pos_r * roll_slack))[0],
+    #     "pos_r": joint_pos_r * roll_slack,
+    #     "joint_pos_yl": (torch.square(joint_pos_yl * yaw_slack_when_rotate))[0],
+    #     "pos_yl": joint_pos_yl * yaw_slack_when_rotate,
+    # })
 
     buffer_key = "joint_reqularization_potential_prev"
     if not hasattr(env, "_custom_buffers"):
@@ -477,7 +500,11 @@ def _expected_foot_height_bezier(phi: torch.Tensor, swing_height: float, stance_
 
     return torch.where(x <= stance_ratio, torch.zeros_like(x), profile)
 
-def feet_height_bezier(env: ManagerBasedRLEnv, swing_height: float = 0.09, sigma: float = 0.08, stance_ratio: float = 0.6) -> torch.Tensor:
+def feet_height_bezier(env: ManagerBasedRLEnv, 
+                        swing_height: float = 0.09, 
+                        sigma: float = 0.08, 
+                        stance_ratio: float = 0.6,
+                        ground_height: float = 0.02) -> torch.Tensor:
     asset = env.scene["robot"]
 
     # Get foot body indices
@@ -497,7 +524,8 @@ def feet_height_bezier(env: ManagerBasedRLEnv, swing_height: float = 0.09, sigma
     command_speed = torch.norm(command_lin_vel, dim=1)
     rz_left = torch.where(command_speed > 0.1, rz_left, torch.zeros_like(rz_left))
     rz_right = torch.where(command_speed > 0.1, rz_right, torch.zeros_like(rz_right))
-
+    rz_left = torch.clamp(rz_left, min=ground_height)
+    rz_right = torch.clamp(rz_right, min=ground_height)
 
     # send_data_stream({
     #     "knee_torque": asset.data.applied_torque[:, asset.find_joints(".*_Knee_.*")[0]].tolist(),
@@ -588,6 +616,7 @@ def stride_length_reward(
     # Initialize buffers for storing previous landing positions
     buffer_key_left = "stride_left_foot_last_landing_pos"
     buffer_key_right = "stride_right_foot_last_landing_pos"
+    buffer_key_last_landed = "stride_last_landed_foot"  # 0: none, 1: left, 2: right
 
     if not hasattr(env, "_custom_buffers"):
         env._custom_buffers = {}
@@ -596,9 +625,12 @@ def stride_length_reward(
         env._custom_buffers[buffer_key_left] = left_foot_pos_xy.clone()
     if buffer_key_right not in env._custom_buffers:
         env._custom_buffers[buffer_key_right] = right_foot_pos_xy.clone()
+    if buffer_key_last_landed not in env._custom_buffers:
+        env._custom_buffers[buffer_key_last_landed] = torch.zeros(env.num_envs, device=env.device, dtype=torch.int)
 
     prev_left_pos = env._custom_buffers[buffer_key_left]
     prev_right_pos = env._custom_buffers[buffer_key_right]
+    last_landed_foot = env._custom_buffers[buffer_key_last_landed]
 
     # Calculate stride length for each foot (xy-norm)
     left_stride = torch.norm(left_foot_pos_xy - prev_left_pos, dim=1)
@@ -611,10 +643,22 @@ def stride_length_reward(
     left_contact = first_contact[:, 0] if first_contact.shape[1] > 0 else torch.zeros(env.num_envs, device=env.device, dtype=torch.bool)
     right_contact = first_contact[:, 1] if first_contact.shape[1] > 1 else torch.zeros(env.num_envs, device=env.device, dtype=torch.bool)
 
-    # Reward: exponential of negative squared error from target stride
-    left_reward = torch.exp(-torch.square(left_stride - target_stride) / sigma) * left_contact.float()
-    right_reward = torch.exp(-torch.square(right_stride - target_stride) / sigma) * right_contact.float()
+    # Check for consecutive landing of the same foot (hopping penalty)
+    # last_landed_foot: 0=none, 1=left, 2=right
+    left_consecutive = (last_landed_foot == 1) & left_contact
+    right_consecutive = (last_landed_foot == 2) & right_contact
 
+    # Reward: exponential of negative squared error from target stride
+    # Zero reward if the same foot lands consecutively (hopping motion)
+    left_reward = torch.exp(-torch.square(left_stride - target_stride) / sigma) * left_contact.float() * (~left_consecutive).float()
+    right_reward = torch.exp(-torch.square(right_stride - target_stride) / sigma) * right_contact.float() * (~right_consecutive).float()
+
+    # send_data_stream({
+    #     "command_speed": command_speed[0],
+    #     "target_stride": target_stride[0],
+    #     "left_stride": left_stride[0],
+    #     "right_stride": right_stride[0],
+    # })
     reward = left_reward + right_reward
 
     # Update stored positions when foot lands
@@ -625,6 +669,14 @@ def stride_length_reward(
         right_contact.unsqueeze(-1), right_foot_pos_xy, prev_right_pos
     )
 
+    # Update last landed foot: 1=left, 2=right (prioritize left if both land simultaneously)
+    new_last_landed = torch.where(
+        left_contact,
+        torch.ones_like(last_landed_foot),
+        torch.where(right_contact, torch.full_like(last_landed_foot, 2), last_landed_foot)
+    )
+    env._custom_buffers[buffer_key_last_landed] = new_last_landed
+
     # Reset stored positions on environment reset
     reset_mask = env.reset_buf > 0
     env._custom_buffers[buffer_key_left] = torch.where(
@@ -633,8 +685,134 @@ def stride_length_reward(
     env._custom_buffers[buffer_key_right] = torch.where(
         reset_mask.unsqueeze(-1), right_foot_pos_xy, env._custom_buffers[buffer_key_right]
     )
+    # Reset last landed foot on environment reset
+    env._custom_buffers[buffer_key_last_landed] = torch.where(
+        reset_mask, torch.zeros_like(last_landed_foot), env._custom_buffers[buffer_key_last_landed]
+    )
 
     # No reward for zero command (standing still)
     reward *= command_speed > 0.1
 
     return reward
+
+def joint_jerk(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Penalize high joint jerk (third derivative of position).
+
+    This function computes the joint jerk for all joints and penalizes high values to encourage smooth motion.
+    """
+    asset = env.scene[asset_cfg.name]
+    # Compute joint acceleration and jerk
+    joint_acc = asset.data.joint_acc
+    # Approximate jerk using finite difference: jerk ≈ (acc_t - acc_{t-1}) / dt
+    buffer_key = "prev_joint_acc"
+    if not hasattr(env, "_custom_buffers"):
+        env._custom_buffers = {}
+    if buffer_key not in env._custom_buffers:
+        env._custom_buffers[buffer_key] = joint_acc.clone()
+    prev_joint_acc = env._custom_buffers[buffer_key]
+    env._custom_buffers[buffer_key] = joint_acc.clone()
+    joint_jerk = (joint_acc - prev_joint_acc) / env.step_dt
+    # Penalize high jerk (L2 norm across all joints)
+    jerk_penalty = torch.norm(joint_jerk, dim=1)
+    return jerk_penalty
+
+
+
+def base_jerk(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Penalize high base jerk (third derivative of position).
+
+    This function computes the base jerk for the robot's root body and penalizes high values to encourage smooth motion.
+    """
+    asset = env.scene[asset_cfg.name]
+    # Compute base linear acceleration and jerk
+    base_lin_acc = asset.data.root_com_lin_vel_w
+    # Approximate jerk using finite difference: jerk ≈ (acc_t - acc_{t-1}) / dt
+    buffer_key = "prev_base_lin_acc"
+    if not hasattr(env, "_custom_buffers"):
+        env._custom_buffers = {}
+    if buffer_key not in env._custom_buffers:
+        env._custom_buffers[buffer_key] = base_lin_acc.clone()
+    prev_base_lin_acc = env._custom_buffers[buffer_key]
+    env._custom_buffers[buffer_key] = base_lin_acc.clone()
+    base_jerk = (base_lin_acc - prev_base_lin_acc) / env.step_dt
+    # Penalize high jerk (L2 norm)
+    jerk_penalty = torch.norm(base_jerk[:, :2], dim=1)
+    return jerk_penalty
+
+
+def bad_gait_penalty(
+    env: ManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg,
+    min_air_time: float = 0.1,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+) -> torch.Tensor:
+    """
+    悪い歩容にペナルティを掛ける。
+    悪い歩容は、片脚での連続接地と指定した時間以下の遊脚期間で定義される
+
+    Args:
+        env: Environment instance
+        sensor_cfg: Configuration for the contact sensor (should include both feet)
+        min_air_time: 最小の遊脚時間。これより短い遊脚はペナルティ対象 [s]
+        asset_cfg: Asset configuration (default: robot)
+
+    Returns:
+        torch.Tensor: ペナルティ値 (悪い歩容ほど高い値)
+    """
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+
+    # 接地検出（first_contact = 今ステップで初めて接地した）
+    first_contact = contact_sensor.compute_first_contact(env.step_dt)[:, sensor_cfg.body_ids]
+    # last_air_time = 直前の遊脚期間
+    last_air_time = contact_sensor.data.last_air_time[:, sensor_cfg.body_ids]
+
+    # sensor_cfg.body_ids: [left_foot, right_foot] を想定
+    left_contact = first_contact[:, 0] if first_contact.shape[1] > 0 else torch.zeros(env.num_envs, device=env.device, dtype=torch.bool)
+    right_contact = first_contact[:, 1] if first_contact.shape[1] > 1 else torch.zeros(env.num_envs, device=env.device, dtype=torch.bool)
+
+    left_air_time = last_air_time[:, 0] if last_air_time.shape[1] > 0 else torch.zeros(env.num_envs, device=env.device)
+    right_air_time = last_air_time[:, 1] if last_air_time.shape[1] > 1 else torch.zeros(env.num_envs, device=env.device)
+
+    # バッファ初期化: 最後に接地した足を記録 (0: none, 1: left, 2: right)
+    buffer_key_last_landed = "bad_gait_last_landed_foot"
+    if not hasattr(env, "_custom_buffers"):
+        env._custom_buffers = {}
+    if buffer_key_last_landed not in env._custom_buffers:
+        env._custom_buffers[buffer_key_last_landed] = torch.zeros(env.num_envs, device=env.device, dtype=torch.int)
+
+    last_landed_foot = env._custom_buffers[buffer_key_last_landed]
+
+    # ペナルティ1: 同じ足が連続で接地（ホッピング）
+    left_consecutive = (last_landed_foot == 1) & left_contact
+    right_consecutive = (last_landed_foot == 2) & right_contact
+    consecutive_penalty = (left_consecutive | right_consecutive).float()
+
+    # ペナルティ2: 遊脚時間が短すぎる
+    # 接地した瞬間のみチェック（first_contact時のlast_air_timeを見る）
+    left_short_air = (left_air_time < min_air_time) & left_contact & (left_air_time > 0)
+    right_short_air = (right_air_time < min_air_time) & right_contact & (right_air_time > 0)
+    short_air_penalty = (left_short_air | right_short_air).float()
+
+    # 最後に接地した足を更新
+    new_last_landed = torch.where(
+        left_contact,
+        torch.ones_like(last_landed_foot),
+        torch.where(right_contact, torch.full_like(last_landed_foot, 2), last_landed_foot)
+    )
+    env._custom_buffers[buffer_key_last_landed] = new_last_landed
+
+    # リセット時の処理
+    reset_mask = env.reset_buf > 0
+    env._custom_buffers[buffer_key_last_landed] = torch.where(
+        reset_mask, torch.zeros_like(last_landed_foot), env._custom_buffers[buffer_key_last_landed]
+    )
+
+    # 合計ペナルティ
+    total_penalty = consecutive_penalty + short_air_penalty
+
+    # コマンド速度が小さい時はペナルティなし（静止時）
+    command_vel_xy = env.command_manager.get_command("base_velocity")[:, :2]
+    command_speed = torch.norm(command_vel_xy, dim=1)
+    total_penalty *= (command_speed > 0.1).float()
+
+    return total_penalty

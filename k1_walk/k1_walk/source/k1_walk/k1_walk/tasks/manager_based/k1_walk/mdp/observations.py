@@ -95,7 +95,7 @@ def clock_phase(env: ManagerBasedRLEnv, frequency: float = 1.0) -> torch.Tensor:
     return torch.cat([sin_phase, cos_phase, combine_phase], dim=-1)  # (num_envs, 3)
 
 
-def phase_time(env: ManagerBasedRLEnv, frequency: float = 1.6, phase_offset: float = torch.pi) -> torch.Tensor:
+def phase_time(env: ManagerBasedRLEnv, frequency: float = 1.2, phase_offset: float = torch.pi) -> torch.Tensor:
     """
     Args:
         env: 環境インスタンス
