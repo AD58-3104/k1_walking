@@ -71,18 +71,18 @@ BOOSTER_K1_CFG = ArticulationCfg(
             # "Right_Elbow_Pitch" : 0.0, 
             # "Right_Elbow_Yaw" : 0.0, 
 
-            "Left_Hip_Pitch" : -0.2, 
+            "Left_Hip_Pitch" : -0.312, 
             "Left_Hip_Roll" : 0.0, 
             "Left_Hip_Yaw" : 0.0, 
-            "Left_Knee_Pitch" : 0.4, 
-            "Left_Ankle_Pitch" : -0.25, 
+            "Left_Knee_Pitch" : 0.669, 
+            "Left_Ankle_Pitch" : -0.363, 
             "Left_Ankle_Roll" : 0.0, 
             
-            "Right_Hip_Pitch" : -0.2, 
+            "Right_Hip_Pitch" : -0.312, 
             "Right_Hip_Roll" : 0.0, 
             "Right_Hip_Yaw" : 0.0, 
-            "Right_Knee_Pitch" : 0.4, 
-            "Right_Ankle_Pitch" : -0.25, 
+            "Right_Knee_Pitch" : 0.669, 
+            "Right_Ankle_Pitch" : -0.363, 
             "Right_Ankle_Roll" : 0.0,
         },
         joint_vel={".*": 0.0},
@@ -212,7 +212,7 @@ class CommandsCfg:
         heading_control_stiffness=0.5,
         debug_vis=True,
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1.0, 1.0), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-1.0, 1.0), heading=(-math.pi, math.pi)
+            lin_vel_x=(0.0, 1.0), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-1.0, 1.0), heading=(-math.pi, math.pi)
         ),
     )
 
@@ -279,12 +279,14 @@ class K1Rewards:
     # ------------- タスク報酬
     track_lin_vel_xy_exp = RewTerm(
         func=mdp.track_lin_vel_xy_yaw_frame_exp,
-        weight=2.0,
+        weight=0.0,
         params={"command_name": "base_velocity", "std": 0.25},
     )
 
     track_ang_vel_z_exp = RewTerm(
-        func=mdp.track_ang_vel_z_world_exp, weight=4.0, params={"command_name": "base_velocity", "std": 0.25}
+        func=mdp.track_ang_vel_z_world_exp, 
+        weight=0.0, 
+        params={"command_name": "base_velocity", "std": 0.25}
     )
 
     # ------------- ビヘイビア報酬
@@ -295,36 +297,24 @@ class K1Rewards:
             "sigma": 0.08,
             "swing_height": 0.09
         },
-    )
+    )  # メモ：報酬は遊脚のみ与えるようにするとか.
 
-    feet_air_time = RewTerm(
-        func=mdp.feet_air_time_positive_biped, weight=2.0,
-        params={
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
-            "threshold": 0.5,
-            "command_name": "base_velocity",
-        }
-    )
 
-    # stride_length = RewTerm(
-    #     func=mdp.stride_length_reward,
-    #     weight=0.8,
-    #     params={
-    #         "command_name": "base_velocity",
-    #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
-    #         "max_stride": 1.0,  # 最大速度時の目標歩幅 [m]
-    #         "max_speed": 1.0,   # 最大速度コマンド [m/s]
-    #         "sigma": 0.1,       # 許容誤差幅（小さいほど厳しい）
-    #     },
-    # )
     bad_gait_penalty = RewTerm(
         func=mdp.bad_gait_penalty,
-        weight=-0.2,
+        weight=-10.0,
         params={
             "min_air_time": 0.3,
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["left_foot_link", "right_foot_link"]),
         }
     )
+
+    # foot_clearance_ji = RewTerm(
+    #     func=mdp.foot_clearance_ji, weight=5.0,
+    #     params={
+    #         "target_clearance": 0.09,
+    #     },
+    # )
 
     # ------------- シェイピング報酬（ポテンシャル系）
     # height_potential = RewTerm(
@@ -348,51 +338,45 @@ class K1Rewards:
 
     joint_regularization_potential = RewTerm(
         func=mdp.joint_reqularization_potential, 
-        weight=2e-4,
+        weight=4e-5,
         params={
             "sigma": 0.25,
-            "pitch_slack": [0.2, 0.2, 1.0], # hip_pitch, knee_pitch, ankle_pitch
-            "roll_slack": [0.5, 1.0],  # hip_roll, ankle_roll
-            "yaw_slack": 0.7,
+            "pitch_slack": [0.01, 0.01, 5.0], # hip_pitch, knee_pitch, ankle_pitch
+            "roll_slack": [1.0, 5.0],  # hip_roll, ankle_roll
+            "yaw_slack": 0.3,
+            "enable_exp_func": True,
+            "enable_potential": False,
             }
     )
 
     feet_parallel_to_ground = RewTerm(
-        func=mdp.feet_parallel_to_ground, weight=3.0,
+        func=mdp.feet_parallel_to_ground, weight=10.0,
         params={"sigma": 0.1}
     )
 
     feet_slide = RewTerm(
         func=mdp.feet_slide,   # あまり高いとジャンプが最適解になる
-        weight=-0.1,
+        weight=-0.1,  # 元-0.1
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot_link"),
         },
     )
 
+    feet_air_time = RewTerm(
+        func=mdp.feet_air_time_positive_biped, weight=15.0,
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
+            "command_name": "base_velocity",
+            "threshold": 0.8,   # この時間以上空中にいると報酬がもらえるようになる
+        }
+    )
+
     # ------------- シェイピング報酬（ペナルティ系）
 
     alive_bonus = RewTerm(
         func=mdp.is_alive,
-        weight=1.0,
-    )
-
-    knee_limit_lower = RewTerm(
-        func=mdp.knee_limit_lower, weight=-1.0,
-        params={"knee_limit_angle": 0.0},  # 0 rad よりも大きくないとペナルティ
-    )
-
-    dof_pos_limits = RewTerm(
-        func=mdp.joint_pos_limits,
-        weight=-10.0,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Ankle_.*", ".*_Hip_.*", ".*_Knee_.*"])},
-    )
-
-    torque_limits = RewTerm(
-        func=mdp.applied_torque_limits,
-        weight=-0.001,
-        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Ankle_.*", ".*_Hip_.*", ".*_Knee_.*"])},
+        weight=2.0,
     )
 
     base_jerk = RewTerm(
@@ -416,14 +400,19 @@ class K1Rewards:
         weight=-0.01
     )
 
-    joint_jerk = RewTerm(
-        func=mdp.joint_jerk,
-        weight=-1e-7,
+    # joint_jerk = RewTerm(
+    #     func=mdp.joint_jerk,
+    #     weight=-1e-7,
+    # )
+
+    body_lin_acc = RewTerm(
+        func=mdp.body_lin_acc_l2,
+        weight=-2e-5,
     )
 
     lin_vel_z_pen = RewTerm(
         func=mdp.lin_vel_z_l2,
-        weight=-0.25,
+        weight=-0.5,
     )
 
     action_rate_l2 = RewTerm(
@@ -453,7 +442,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="Trunk"),
-            "mass_distribution_params": (-0.5, 0.5),
+            "mass_distribution_params": (-0.2, 0.2),
             "operation": "add",
         },
     )
@@ -534,7 +523,7 @@ class CurriculumCfg:
         func=mdp.modify_reward_weight_by_episode_length,
         params = {
             "term_name" : "action_rate_l2",
-            "target_weight" : -1.2,
+            "target_weight" : -2.0,
         })
     
     base_jerk_cur = CurrTerm(
@@ -552,32 +541,27 @@ class CurriculumCfg:
             "target_weight" : -1.0,
         })
 
-    
+    tracking_lin_vel_cur = CurrTerm(
+        func=mdp.modify_reward_weight_by_episode_length,
+        params = {
+            "term_name" : "track_lin_vel_xy_exp",
+            "target_weight" : 2.0,
+        })
 
-    # joint_jerk_cur = CurrTerm(
-    #     func=mdp.modify_reward_weight_by_episode_length,
-    #     params = {
-    #         "term_name" : "joint_jerk",
-    #         "target_weight" : -1e-6,
-    #     }
-    # )
+    tracking_ang_vel_cur = CurrTerm(
+        func=mdp.modify_reward_weight_by_episode_length,
+        params = {
+            "term_name" : "track_ang_vel_z_exp",
+            "target_weight" : 1.5,
+        })
 
-    # ang_vel_xy_cur = CurrTerm(
-    #     func=mdp.modify_reward_weight_by_episode_length,
-    #     params = {
-    #         "term_name" : "ang_vel_xy_l2",
-    #         "target_weight" : -0.05,
-    #     }
-    # )
-
-    # lin_vel_z_pen_cur = CurrTerm(
-    #     func=mdp.modify_reward_weight_by_episode_length,
-    #     params = {
-    #         "term_name" : "lin_vel_z_pen",
-    #         "target_weight" : -2.5,
-    #     }
-    # )
-
+    body_lin_acc_cur = CurrTerm(
+        func=mdp.modify_reward_weight_by_episode_length,
+        params = {
+            "term_name" : "body_lin_acc",
+            "target_weight" : -1e-4,
+        }
+    )
 
 @configclass
 class K1RoughEnvCfg(ManagerBasedRLEnvCfg):

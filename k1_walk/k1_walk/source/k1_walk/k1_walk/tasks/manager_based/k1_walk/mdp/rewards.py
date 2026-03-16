@@ -244,7 +244,9 @@ def joint_reqularization_potential(env: ManagerBasedRLEnv, sigma: float = 0.5,
                                     discount_factor: float = 0.99,
                                     pitch_slack: list[float] = [1.0, 1.0, 1.0],
                                     roll_slack: list[float] = [1.0, 1.0],
-                                    yaw_slack: float = 0.8
+                                    yaw_slack: float = 0.8,
+                                    enable_exp_func: bool = True,
+                                    enable_potential: bool = True
                                     ) -> torch.Tensor:
     """Regularization potential for joint positions.
 
@@ -306,12 +308,23 @@ def joint_reqularization_potential(env: ManagerBasedRLEnv, sigma: float = 0.5,
     # - Pitch: penalize deviation from default for each leg independently
     # - Roll: penalize left-right asymmetry
     # - Yaw: penalize deviation from default
-    current_potential = torch.exp(-(torch.square(joint_pos_left_p * pitch_slack)) / sigma).sum(dim=1) + \
-                            torch.exp(-(torch.square(joint_pos_right_p * pitch_slack)) / sigma).sum(dim=1) + \
-                            torch.exp(-(torch.square(joint_pos_r * roll_slack)) / sigma).sum(dim=1) + \
-                            torch.exp(-(torch.square(joint_pos_yr * yaw_slack_when_rotate)) / sigma).sum(dim=1) + \
-                            torch.exp(-(torch.square(joint_pos_yl * yaw_slack_when_rotate)) / sigma).sum(dim=1)
-    
+    if enable_exp_func:
+        current_potential = torch.exp(-(torch.square(joint_pos_left_p * pitch_slack)) / sigma).sum(dim=1) + \
+                                torch.exp(-(torch.square(joint_pos_right_p * pitch_slack)) / sigma).sum(dim=1) + \
+                                torch.exp(-(torch.square(joint_pos_r * roll_slack)) / sigma).sum(dim=1) + \
+                                torch.exp(-(torch.square(joint_pos_yr * yaw_slack_when_rotate)) / sigma).sum(dim=1) + \
+                                torch.exp(-(torch.square(joint_pos_yl * yaw_slack_when_rotate)) / sigma).sum(dim=1)
+    else:
+        current_potential = (torch.square(joint_pos_left_p  ) * pitch_slack).sum(dim=1) + \
+                                (torch.square(joint_pos_right_p) * pitch_slack).sum(dim=1) + \
+                                (torch.square(joint_pos_r ) * roll_slack).sum(dim=1) + \
+                                (torch.square(joint_pos_yr) * yaw_slack_when_rotate).sum(dim=1) + \
+                                (torch.square(joint_pos_yl) * yaw_slack_when_rotate).sum(dim=1)
+
+    # ポテンシャルベースでない場合、そのままを負の報酬として返す
+    if not enable_potential:
+        return -current_potential
+
     # send_data_stream({
     #     "joint_pos_left_p": (torch.square(joint_pos_left_p * pitch_slack))[0],
     #     "pos_p": joint_pos_left_p * pitch_slack,
