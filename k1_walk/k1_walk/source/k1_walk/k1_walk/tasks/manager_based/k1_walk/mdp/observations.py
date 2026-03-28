@@ -29,22 +29,32 @@ def _get_or_update_gait_state(
     randomize_phase: bool = True,
     stand_phase_value: float = torch.pi,
 ) -> dict[str, torch.Tensor]:
-    """Maintain a holosoma-like gait state on the IsaacLab env.
+    """Maintain a per-episode gait phase state on the IsaacLab env.
 
-    The stock IsaacLab velocity command used by this task does not own a gait-state
-    buffer. To keep the task structure close to holosoma, we maintain per-env gait
-    phase buffers here and reinitialize them on reset.
+    The gait signal is a deterministic oscillator driven only by the episode step
+    count plus per-episode randomization of the initial phase and gait frequency.
+    No per-step randomization or command-dependent phase overrides are applied.
     """
+
+    def wrap_to_pi(angle: torch.Tensor) -> torch.Tensor:
+        return torch.remainder(angle + torch.pi, 2 * torch.pi) - torch.pi
+
     if not hasattr(env, "_gait_state"):
         env._gait_state = {}
 
+    _ = stand_phase_value  # Retained for API compatibility.
     state = env._gait_state
     num_envs = env.num_envs
-    device = env.device
+    device = torch.device(env.device)
     mean_gait_freq = 1.0 / gait_period
 
     needs_init = (
         "phase_offset" not in state
+        or "phase" not in state
+        or "gait_freq" not in state
+        or "phase_dt" not in state
+        or "initialized" not in state
+        or "last_episode_step" not in state
         or state["phase_offset"].shape[0] != num_envs
         or state["phase_offset"].device != device
     )
@@ -55,16 +65,18 @@ def _get_or_update_gait_state(
         state["gait_freq"] = torch.zeros((num_envs, 1), dtype=torch.float32, device=device)
         state["phase_dt"] = torch.zeros((num_envs, 1), dtype=torch.float32, device=device)
         state["initialized"] = torch.zeros(num_envs, dtype=torch.bool, device=device)
+        state["last_episode_step"] = torch.full((num_envs,), -1, dtype=torch.long, device=device)
 
     initialized = state["initialized"]
-
-    if hasattr(env, "reset_buf"):
-        reset_ids = torch.nonzero(env.reset_buf > 0, as_tuple=False).flatten()
+    if hasattr(env, "episode_length_buf"):
+        episode_steps = env.episode_length_buf.to(device=device, dtype=torch.long)
     else:
-        reset_ids = torch.empty(0, dtype=torch.long, device=device)
+        # ObservationManager initializes term shapes before runtime buffers exist.
+        episode_steps = torch.zeros(num_envs, dtype=torch.long, device=device)
 
-    init_ids = torch.nonzero(~initialized, as_tuple=False).flatten()
-    env_ids = torch.unique(torch.cat([init_ids, reset_ids], dim=0)) if (init_ids.numel() or reset_ids.numel()) else init_ids
+    episode_started = torch.logical_and(episode_steps == 0, state["last_episode_step"] != 0)
+    init_mask = torch.logical_or(~initialized, episode_started)
+    env_ids = torch.nonzero(init_mask, as_tuple=False).flatten()
 
     if env_ids.numel() > 0:
         if getattr(env, "is_evaluating", False):
@@ -75,7 +87,7 @@ def _get_or_update_gait_state(
             if randomize_phase:
                 phase0 = torch.empty((env_ids.numel(),), device=device).uniform_(-torch.pi, torch.pi)
                 state["phase_offset"][env_ids, 0] = phase0
-                state["phase_offset"][env_ids, 1] = torch.fmod(phase0 + 2 * torch.pi, 2 * torch.pi) - torch.pi
+                state["phase_offset"][env_ids, 1] = wrap_to_pi(phase0 - torch.pi)
             else:
                 state["phase_offset"][env_ids, 0] = 0.0
                 state["phase_offset"][env_ids, 1] = -torch.pi
@@ -91,22 +103,9 @@ def _get_or_update_gait_state(
         state["phase"][env_ids] = state["phase_offset"][env_ids]
         state["initialized"][env_ids] = True
 
-    if hasattr(env, "episode_length_buf"):
-        episode_length = env.episode_length_buf.unsqueeze(1).float()
-    else:
-        # ObservationManager initializes term shapes before the env runtime buffers exist.
-        episode_length = torch.zeros((num_envs, 1), dtype=torch.float32, device=device)
-
-    phase_tp1 = episode_length * state["phase_dt"] + state["phase_offset"]
-    state["phase"] = torch.fmod(phase_tp1 + torch.pi, 2 * torch.pi) - torch.pi
-
-    commands = env.command_manager.get_command("base_velocity")
-    stand_mask = torch.logical_and(
-        torch.linalg.norm(commands[:, :2], dim=1) < 0.01,
-        torch.abs(commands[:, 2]) < 0.01,
-    )
-    if stand_mask.any():
-        state["phase"][stand_mask] = torch.full((int(stand_mask.sum().item()), 2), stand_phase_value, device=device)
+    phase_tp1 = episode_steps.unsqueeze(1).float() * state["phase_dt"] + state["phase_offset"]
+    state["phase"].copy_(wrap_to_pi(phase_tp1))
+    state["last_episode_step"].copy_(episode_steps)
 
     return state
 
