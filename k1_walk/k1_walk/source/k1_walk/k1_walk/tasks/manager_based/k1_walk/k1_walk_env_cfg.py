@@ -295,7 +295,7 @@ class K1Rewards:
     track_lin_vel_xy_exp = RewTerm(
         func=mdp.track_lin_vel_xy_yaw_frame_exp,
         weight=3.0,
-        params={"command_name": "base_velocity", "std": 0.25},
+        params={"command_name": "base_velocity", "std": 0.2},
     )
 
     track_ang_vel_z_exp = RewTerm(
