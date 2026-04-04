@@ -11,12 +11,12 @@ from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, R
 @configclass
 class G1RoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
-    max_iterations = 3000
-    save_interval = 50
+    max_iterations = 25000
+    save_interval = 100
     experiment_name = "g1_rough"
     empirical_normalization = False
     policy = RslRlPpoActorCriticCfg(
-        init_noise_std=1.0,
+        init_noise_std=0.8,
         actor_hidden_dims=[512, 256, 128],
         critic_hidden_dims=[512, 256, 128],
         activation="elu",
@@ -25,10 +25,10 @@ class G1RoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         value_loss_coef=1.0,
         use_clipped_value_loss=True,
         clip_param=0.2,
-        entropy_coef=0.008,
-        num_learning_epochs=5,
+        entropy_coef=0.01,
+        num_learning_epochs=8,
         num_mini_batches=4,
-        learning_rate=0.0003,
+        learning_rate=1.0e-5,
         schedule="adaptive",
         gamma=0.99,
         lam=0.95,
@@ -42,7 +42,5 @@ class G1FlatPPORunnerCfg(G1RoughPPORunnerCfg):
     def __post_init__(self):
         super().__post_init__()
 
-        self.max_iterations = 7200
         self.experiment_name = "k1_rsl"
-        self.policy.actor_hidden_dims = [256, 256, 128]
-        self.policy.critic_hidden_dims = [256, 256, 128]
+        # Keep the network shape aligned with Holosoma's t1_29dof PPO reference.

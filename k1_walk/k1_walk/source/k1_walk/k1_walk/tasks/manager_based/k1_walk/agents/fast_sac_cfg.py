@@ -6,8 +6,8 @@
 import sys
 import os
 
-# Add isaaclab_fast_sac to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../../../../scripts/holosoma/holosoma/src/isaaclab_fast_sac"))
+# Add standalone isaaclab_fast_sac to the path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../../../../scripts/FastSAC_standalone/isaaclab_fast_sac"))
 
 from isaaclab.utils import configclass
 from isaaclab_fast_sac import FastSacRunnerCfg, FastSacAlgorithmCfg
@@ -29,7 +29,7 @@ class K1FastSacRunnerCfg(FastSacRunnerCfg):
     # Observation groups
     obs_groups: dict = {
         "policy": ["policy"],
-        "critic": ["policy"],
+        "critic": ["policy", "privileged"],
     }
 
     clip_actions: float | None = None
@@ -90,6 +90,7 @@ class K1FastSacRunnerCfg(FastSacRunnerCfg):
         amp=True,
         amp_dtype="bf16",
         obs_normalization=True,
+        use_symmetry=False,
 
         # Logging
         logging_interval=100,
@@ -104,3 +105,4 @@ class K1RoughFastSacRunnerCfg(K1FastSacRunnerCfg):
         super().__post_init__()
         self.experiment_name = "k1_rough_fast_sac"
         self.max_iterations = 15000
+        self.logger = "tensorboard"

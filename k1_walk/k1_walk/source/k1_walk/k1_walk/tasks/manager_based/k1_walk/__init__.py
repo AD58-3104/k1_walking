@@ -38,6 +38,7 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.k1_walk_env_cfg:K1FlatEnvCfg",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:G1FlatPPORunnerCfg",
         "fast_sac_cfg_entry_point": f"{agents.__name__}.fast_sac_cfg:K1FastSacRunnerCfg",
     },
 )
@@ -68,6 +69,7 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.k1_walk_env_cfg:K1FlatEnvCfg_PLAY",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:G1FlatPPORunnerCfg",
         "fast_sac_cfg_entry_point": f"{agents.__name__}.fast_sac_cfg:K1FastSacRunnerCfg",
     },
 )
