@@ -407,7 +407,7 @@ class K1Rewards:
 
     ang_vel_xy_l2 = RewTerm(  # まだ追加した事は無いが、将来的に追加するかも
         func=mdp.ang_vel_xy_l2,
-        weight=-0.001
+        weight=-0.01
     )
 
     # body_lin_acc = RewTerm(
@@ -417,7 +417,7 @@ class K1Rewards:
 
     lin_vel_z_pen = RewTerm(
         func=mdp.lin_vel_z_l2,
-        weight=-0.5,
+        weight=-0.3,
     )
 
     feet_close_penalty = RewTerm(
