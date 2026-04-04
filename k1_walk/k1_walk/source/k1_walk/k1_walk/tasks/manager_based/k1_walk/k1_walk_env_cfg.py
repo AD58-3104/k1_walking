@@ -236,6 +236,7 @@ class ObservationsCfg:
         # observation terms (order preserved)
         joint_pos = ObsTerm(func=mdp.joint_pos_rel, noise=Unoise(n_min=-0.01, n_max=0.01))
         joint_vel = ObsTerm(func=mdp.joint_vel_rel, noise=Unoise(n_min=-0.03, n_max=0.03))
+        base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.1, n_max=0.1))
         base_ang_vel = ObsTerm(func=mdp.base_ang_vel, noise=Unoise(n_min=-0.2, n_max=0.2))
         # body_height = ObsTerm(func=mdp.body_height, noise=Unoise(n_min=-0.05, n_max=0.05))
         projected_gravity = ObsTerm(
@@ -294,7 +295,7 @@ class K1Rewards:
     # ------------- タスク報酬
     track_lin_vel_xy_exp = RewTerm(
         func=mdp.track_lin_vel_xy_yaw_frame_exp,
-        weight=4.0,
+        weight=2.0,
         params={"command_name": "base_velocity", "std": 0.25},
     )
 
