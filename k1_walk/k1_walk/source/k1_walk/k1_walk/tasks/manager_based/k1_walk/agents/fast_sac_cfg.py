@@ -49,7 +49,7 @@ class K1FastSacRunnerCfg(FastSacRunnerCfg):
         num_steps=1,
 
         # Discount factor
-        gamma=0.97,
+        gamma=0.99,
         tau=0.125,
 
         # Batch and update settings
