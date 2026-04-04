@@ -333,33 +333,33 @@ class K1Rewards:
 
     orientation_potential = RewTerm(
         func=mdp.orientation_potential,
-        weight=1.0,
+        weight=-1e-2,
         params={
-            "sigma": 0.2,
+            "sigma": 0.04,
             "discount_factor": 0.985,
             "enable_potential": False,
             }
     )
 
     joint_regularization_potential = RewTerm(
-        func=mdp.joint_reqularization_potential, 
-        weight=5.0e-4,
+        func=mdp.joint_reqularization_potential,
+        weight=4.0e-5,
         params={
-            "sigma": 0.15,
+            "sigma": 0.25,
             "pitch_slack": [0.01, 0.01, 5.0], # hip_pitch, knee_pitch, ankle_pitch
             "roll_slack": [1.0, 5.0],  # hip_roll, ankle_roll
-            "yaw_slack": 0.9,
+            "yaw_slack": 0.3,
             "enable_exp_func": True,
             "enable_potential": False,
             }
     )
 
     feet_parallel_to_ground = RewTerm(
-        func=mdp.feet_parallel_to_ground, weight=3.0,
+        func=mdp.feet_parallel_to_ground, weight=3.0 * 0.1,
         params={
             "sigma": 0.1,
             "discount_factor": 0.985,
-            "enable_potential": False,
+            "enable_potential": True,
                 }
     )
 
@@ -463,7 +463,7 @@ class CurriculumCfg:
         func=mdp.modify_reward_weight_by_episode_length_linearly,
         params = {
             "term_name" : "orientation_potential",
-            "target_weight" : 2.0
+            "target_weight" : -5.0
         }
     )
 
@@ -471,7 +471,7 @@ class CurriculumCfg:
         func=mdp.modify_reward_weight_by_episode_length_linearly,
         params = {
             "term_name" : "joint_regularization_potential",
-            "target_weight" : 3.0e-3,
+            "target_weight" : 3.0e-4,
             "init_levelup_threshold" : 200,
         }
     )
