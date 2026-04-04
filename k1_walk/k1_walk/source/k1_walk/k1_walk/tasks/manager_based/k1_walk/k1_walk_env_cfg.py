@@ -373,7 +373,7 @@ class K1Rewards:
     # )
 
     feet_air_time = RewTerm(
-        func=mdp.feet_air_time, weight=8.0,
+        func=mdp.feet_air_time, weight=5.0,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
             "command_name": "base_velocity",
