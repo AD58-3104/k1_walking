@@ -45,7 +45,7 @@ class K1FastSacRunnerCfg(FastSacRunnerCfg):
         alpha_learning_rate=3e-4,
 
         # Replay buffer
-        buffer_size=2048,
+        buffer_size=1024,
         num_steps=1,
 
         # Discount factor
@@ -56,7 +56,7 @@ class K1FastSacRunnerCfg(FastSacRunnerCfg):
         batch_size=8192,
         learning_starts=10,
         policy_frequency=4,
-        num_updates=16,
+        num_updates=8,
 
         # Entropy
         target_entropy_ratio=0.0,

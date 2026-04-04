@@ -384,7 +384,7 @@ class K1Rewards:
     # ------------- シェイピング報酬（ペナルティ系）
     action_rate_l2_legs = RewTerm(
         func=mdp.action_rate_l2_subset,
-        weight=-0.1,
+        weight=-0.01,
         params={
             "joint_name_patterns": [".*_Hip_.*", ".*_Knee_.*", ".*_Ankle_.*"],
             "action_term_name": "joint_pos",
@@ -393,7 +393,7 @@ class K1Rewards:
 
     action_rate_l2_arms = RewTerm(
         func=mdp.action_rate_l2_subset,
-        weight=-0.05,
+        weight=-0.01,
         params={
             "joint_name_patterns": [".*_Shoulder_.*", ".*_Elbow_.*"],
             "action_term_name": "joint_pos",
