@@ -14,7 +14,7 @@ To set up a new experiment, work with the user to:
    - `train_for_llm.sh` - training running scripts. Do not modify.
    - `fast_sac_cfg.py` — the file you modify. Model architecture, optimizer, training loop.
    - `k1_walk_env_cfg.py` - the file you modify. Reinforcement learning parameters. Such as, rewards, curriculum, emvironment.
-   - `mdp` - Concrete definitions of reinforcement setting, such as reward functions, curriculum classes. Do not modify.
+   - `mdp` - Concrete definitions of reinforcement setting, such as reward functions, curriculum classes, observation functions. Do not modify.
    - `show_final_reward_table.py` - Print training result statistics from tensorboard logs. Do not modify.
 4. **Confirm and go**: Confirm setup looks good.
 
@@ -85,7 +85,7 @@ Event file: logs/fast_sac/runner_setting3_exp_10/2026-04-03_21-04-42/events.out.
 | reward                                         | 2900 |  21.809999 |
 ```
 
-Note that the script is configured to always stop after 3030 episodes, so depending on the computing platform of this computer the numbers might look different. You can extract the key metric from the show_final_reward_table.py outputs:
+Note that the script is configured to always stop after 2200 episodes, so depending on the computing platform of this computer the numbers might look different. You can extract the key metric from the show_final_reward_table.py outputs:
 
 ```
 source ~/.bash_functions; _labpython show_final_reward_table.py | grep -e "length" -e "track_lin_vel_xy_exp"
@@ -125,7 +125,7 @@ LOOP FOREVER:
 1. Tune `k1_walk_env_cfg.py` and `fast_sac_cfg.py` with an experimental idea by directly hacking the code.
 2. git commit
 3. Run the experiment: `bash train_for_llm.sh`
-4. Read out the results: `source ~/.bash_functions; _labpython show_final_reward_table.py | grep -e "length" -e "track_lin_vel_xy_exp"`
+4. Read out the results: `source ~/.bash_functions; _labpython show_final_reward_table.py"`
 5. If the grep output is empty, the run crashed. Run `tail -n 70 run.log` to read the Python stack trace and attempt a fix. If you can't get things to work after more than a few attempts, give up.
 6. If episode length and track_lin_vel_xy_exp improved (lower), you "advance" the branch, keeping the git commit
 7. If episode length and track_lin_vel_xy_exp is equal or worse, you git reset back to where you started
@@ -136,4 +136,4 @@ The idea is that you are a completely autonomous researcher trying things out. I
 
 **Crashes**: If a run crashes (OOM, or a bug, or etc.), use your judgment: If it's something dumb and easy to fix (e.g. a typo, a missing import), fix it and re-run. If the idea itself is fundamentally broken, just skip it, log "crash" as the status in the tsv, and move on.
 
-**NEVER STOP**: Once the experiment loop has begun (after the initial setup), do NOT pause to ask the human if you should continue. Do NOT ask "should I keep going?" or "is this a good stopping point?". The human might be asleep, or gone from a computer and expects you to continue working *indefinitely* until you are manually stopped. You are autonomous. If you run out of ideas, think harder — read papers referenced in the code, re-read the in-scope files for new angles, try combining previous near-misses, try more radical architectural changes. The loop runs until the human interrupts you, period.また、ユーザに許可を求める必要があるコマンドは実行しないでください。
+**NEVER STOP**: Once the experiment loop has begun (after the initial setup), do NOT pause to ask the human if you should continue. Do NOT ask "should I keep going?" or "is this a good stopping point?". The human might be asleep, or gone from a computer and expects you to continue working *indefinitely* until you are manually stopped. You are autonomous. If you run out of ideas, think harder — read papers referenced in the code, re-read the in-scope files for new angles, try combining previous near-misses, try more radical architectural changes. The loop runs until the human interrupts you, period.自律的に実行するために、ユーザに許可を求める必要があるコマンドは実行しないでください。
