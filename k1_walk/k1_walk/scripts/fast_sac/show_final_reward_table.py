@@ -31,8 +31,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--tag-prefix",
-        default="Rewards/",
-        help="Only include scalar tags starting with this prefix.",
+        nargs="+",
+        default=["Rewards/", "Episode/"],
+        help="Only include scalar tags starting with these prefixes. Can specify multiple.",
     )
     parser.add_argument(
         "--step",
@@ -65,7 +66,7 @@ def find_latest_event_file(log_root: Path, run_dir: Path | None) -> Path:
     return event_files[-1]
 
 
-def load_scalar_rows(event_file: Path, tag_prefix: str, step: int | None = None) -> list[dict[str, float | int | str]]:
+def load_scalar_rows(event_file: Path, tag_prefixes: list[str], step: int | None = None) -> list[dict[str, float | int | str]]:
     try:
         from tensorboard.backend.event_processing import event_accumulator
     except ModuleNotFoundError as exc:
@@ -77,9 +78,18 @@ def load_scalar_rows(event_file: Path, tag_prefix: str, step: int | None = None)
     accumulator.Reload()
 
     tags = accumulator.Tags().get("scalars", [])
-    reward_tags = [tag for tag in tags if tag.startswith(tag_prefix)]
+
+    def find_matching_prefix(tag: str) -> str | None:
+        for prefix in tag_prefixes:
+            if tag.startswith(prefix):
+                return prefix
+        return None
+
     rows: list[dict[str, float | int | str]] = []
-    for tag in reward_tags:
+    for tag in tags:
+        matched_prefix = find_matching_prefix(tag)
+        if matched_prefix is None:
+            continue
         events = accumulator.Scalars(tag)
         if not events:
             continue
@@ -95,7 +105,7 @@ def load_scalar_rows(event_file: Path, tag_prefix: str, step: int | None = None)
                 continue
         rows.append(
             {
-                "name": tag[len(tag_prefix) :] if tag_prefix else tag,
+                "name": tag[len(matched_prefix):] if matched_prefix else tag,
                 "full_tag": tag,
                 "step": int(selected_event.step),
                 "value": float(selected_event.value),
@@ -118,7 +128,7 @@ def to_markdown_table(rows: list[dict[str, float | int | str]]) -> str:
     if not rows:
         return "No matching scalar tags were found."
 
-    headers = ("Reward", "Step", "Value")
+    headers = ("Metric", "Step", "Value")
     table_rows = [
         (
             str(row["name"]),
