@@ -236,7 +236,6 @@ class ObservationsCfg:
         # observation terms (order preserved)
         joint_pos = ObsTerm(func=mdp.joint_pos_rel, noise=Unoise(n_min=-0.01, n_max=0.01))
         joint_vel = ObsTerm(func=mdp.joint_vel_rel, noise=Unoise(n_min=-0.03, n_max=0.03))
-        base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.1, n_max=0.1))
         base_ang_vel = ObsTerm(func=mdp.base_ang_vel, noise=Unoise(n_min=-0.2, n_max=0.2))
         # body_height = ObsTerm(func=mdp.body_height, noise=Unoise(n_min=-0.05, n_max=0.05))
         projected_gravity = ObsTerm(
@@ -306,7 +305,7 @@ class K1Rewards:
     )
 
     feet_height_bezier = RewTerm(
-        func=mdp.feet_height_bezier, weight=5.0,
+        func=mdp.feet_height_bezier, weight=8.0,
         params={
             "sigma": 0.08,
             "swing_height": 0.09,
@@ -316,7 +315,7 @@ class K1Rewards:
 
     alive_bonus = RewTerm(
         func=mdp.is_alive,
-        weight= 10.0,
+        weight= 5.0,
     )
 
     # ------------- ビヘイビア報酬
