@@ -114,7 +114,7 @@ options:
   --descending          Sort in descending order.
 ```
 
-`params`ディレクトリには、`agent.yaml`と`env.yaml`が含まれます。これらは、その時の試行におけるfast_sacのエージェントの設定と、rl環境の設定をそれぞれ記録するものです。
+logsディレクトリのサブディレクトリとして存在する`params`ディレクトリには、その時の試行におけるfast_sacのエージェントの設定を表す`agent.yaml`とその時のrl環境のパラメータを表す`env.yaml`が含まれます。過去のパラメータ変更履歴を見て、チューニングの指針を決めたい場合は、これらのファイルも参照してください。
 
 ## The experiment loop
 
