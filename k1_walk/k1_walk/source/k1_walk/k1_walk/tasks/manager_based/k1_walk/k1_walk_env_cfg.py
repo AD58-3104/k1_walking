@@ -315,7 +315,7 @@ class K1Rewards:
 
     alive_bonus = RewTerm(
         func=mdp.is_alive,
-        weight= 5.0,
+        weight= 10.0,
     )
 
     # ------------- ビヘイビア報酬
