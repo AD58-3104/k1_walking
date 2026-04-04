@@ -56,7 +56,7 @@ class K1FastSacRunnerCfg(FastSacRunnerCfg):
         batch_size=8192,
         learning_starts=10,
         policy_frequency=4,
-        num_updates=8,
+        num_updates=16,
 
         # Entropy
         target_entropy_ratio=0.0,
