@@ -333,11 +333,11 @@ class K1Rewards:
 
     orientation_potential = RewTerm(
         func=mdp.orientation_potential,
-        weight=-1e-2,
+        weight=1.0,
         params={
-            "sigma": 0.04, 
+            "sigma": 0.2,
             "discount_factor": 0.985,
-            "enable_potential": False, # falseにするとexpが無効になる
+            "enable_potential": False,
             }
     )
 
@@ -355,11 +355,11 @@ class K1Rewards:
     )
 
     feet_parallel_to_ground = RewTerm(
-        func=mdp.feet_parallel_to_ground, weight=3.0 * 0.1,
+        func=mdp.feet_parallel_to_ground, weight=3.0,
         params={
             "sigma": 0.1,
             "discount_factor": 0.985,
-            "enable_potential": True,
+            "enable_potential": False,
                 }
     )
 
@@ -463,7 +463,7 @@ class CurriculumCfg:
         func=mdp.modify_reward_weight_by_episode_length_linearly,
         params = {
             "term_name" : "orientation_potential",
-            "target_weight" : -5.0
+            "target_weight" : 2.0
         }
     )
 
