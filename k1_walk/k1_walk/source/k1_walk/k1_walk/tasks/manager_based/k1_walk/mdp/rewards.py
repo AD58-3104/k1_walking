@@ -11,17 +11,59 @@ specify the reward function and its parameters.
 
 from __future__ import annotations
 
+import re
 import torch
 from typing import TYPE_CHECKING
 
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.sensors import ContactSensor
-from isaaclab.utils.math import quat_rotate_inverse, yaw_quat, euler_xyz_from_quat
+from isaaclab.utils.math import quat_rotate_inverse, yaw_quat, euler_xyz_from_quat, wrap_to_pi
 from .data_logger import send_data_stream
 from .observations import phase_time
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
+
+
+def _resolve_action_subset_indices(
+    env: ManagerBasedRLEnv,
+    action_term_name: str,
+    joint_name_patterns: list[str],
+) -> torch.Tensor:
+    """Resolve action-vector indices for joints matching the given regex patterns."""
+    cache_key = f"action_subset_indices::{action_term_name}::{'|'.join(joint_name_patterns)}"
+    if not hasattr(env, "_custom_buffers"):
+        env._custom_buffers = {}
+    if cache_key in env._custom_buffers:
+        return env._custom_buffers[cache_key]
+
+    action_term = env.action_manager._terms[action_term_name]
+    action_joint_names = action_term._joint_names
+    matched_indices = [
+        index
+        for index, joint_name in enumerate(action_joint_names)
+        if any(re.fullmatch(pattern, joint_name) for pattern in joint_name_patterns)
+    ]
+    if not matched_indices:
+        raise ValueError(
+            f"No action joints matched patterns {joint_name_patterns} for action term '{action_term_name}'."
+        )
+
+    subset_indices = torch.tensor(matched_indices, device=env.device, dtype=torch.long)
+    env._custom_buffers[cache_key] = subset_indices
+    return subset_indices
+
+
+def action_rate_l2_subset(
+    env: ManagerBasedRLEnv,
+    joint_name_patterns: list[str],
+    action_term_name: str = "joint_pos",
+) -> torch.Tensor:
+    """Penalize action-rate L2 only for a subset of action-controlled joints."""
+    subset_indices = _resolve_action_subset_indices(env, action_term_name, joint_name_patterns)
+    actions = env.action_manager.action[:, subset_indices]
+    prev_actions = env.action_manager.prev_action[:, subset_indices]
+    return torch.sum(torch.square(actions - prev_actions), dim=1)
 
 
 def feet_air_time(
@@ -107,7 +149,12 @@ def track_ang_vel_z_world_exp(
     ang_vel_error = torch.square(env.command_manager.get_command(command_name)[:, 2] - asset.data.root_ang_vel_w[:, 2])
     return torch.exp(-ang_vel_error / std**2)
 
-def orientation_potential(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"), sigma: float = 0.5 , discount_factor: float = 0.99) -> torch.Tensor:
+def orientation_potential(env: ManagerBasedRLEnv, 
+                          asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"), 
+                          sigma: float = 0.5 , 
+                          discount_factor: float = 0.99,
+                          enable_potential: bool = True,
+                          ) -> torch.Tensor:
     """
     Potential-based reward shaping for maintaining upright orientation.
 
@@ -142,11 +189,17 @@ def orientation_potential(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = Sc
     # Potential function: exp(-(ux^2 + uy^2) / σ)
     # ロボットが完全に直立している時、upright_vector = [0, 0, 1] なので potential = 1
     # ロボットが傾くと、ux, uy が増加し、potential が減少
-    current_potential = torch.exp(-(torch.square(upright_vector[:, 0]) + torch.square(upright_vector[:, 1])) / sigma)
+    err_value = torch.square(upright_vector[:, 0]) + torch.square(upright_vector[:, 1])
+    current_potential = torch.exp(-err_value / sigma)
+
+    if not enable_potential:
+        return err_value
+
     # send_data_stream({"ux": upright_vector[0, 0],
     #                   "uy": upright_vector[0, 1],
     #                   "ux2": torch.square(upright_vector[0, 0]),
     #                   "uy2": torch.square(upright_vector[0, 1]),
+    #                     "potential": current_potential[0],
     #                   })
 
     # バッファキー名
@@ -240,6 +293,22 @@ def foot_ref_height(env: ManagerBasedRLEnv, target_height: float = 0.2,frequency
 
     return shaped_reward
 
+def upper_body_joint_regularization(
+            env: ManagerBasedRLEnv, 
+            asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+        ) -> torch.Tensor:
+    asset = env.scene[asset_cfg.name]
+    joint_pos_rel = asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
+    err = torch.sum(torch.square(joint_pos_rel), dim=1)
+    regularization_reward = err
+    # send_data_stream(
+    #     {
+    #         "err": err[0],
+    #     }
+    # )
+
+    return regularization_reward
+
 def joint_reqularization_potential(env: ManagerBasedRLEnv, sigma: float = 0.5, 
                                     discount_factor: float = 0.99,
                                     pitch_slack: list[float] = [1.0, 1.0, 1.0],
@@ -301,7 +370,7 @@ def joint_reqularization_potential(env: ManagerBasedRLEnv, sigma: float = 0.5,
     asset_cfg_right_y.resolve(env.scene)
     joint_pos_yr = asset.data.joint_pos[:, asset_cfg_right_y.joint_ids] - asset.data.default_joint_pos[:, asset_cfg_right_y.joint_ids]
     joint_pos_yl = asset.data.joint_pos[:, asset_cfg_left_y.joint_ids] - asset.data.default_joint_pos[:, asset_cfg_left_y.joint_ids]
-    yaw_slack_when_rotate = torch.where(env.command_manager.get_command("base_velocity")[:, :2].norm(dim=1) > 0.1, yaw_slack, 1.0)  # コマンド速度が大きいときはyawのペナルティを緩和する
+    yaw_slack_when_rotate = torch.where(env.command_manager.get_command("base_velocity")[:, :2].norm(dim=1) > 0.1, yaw_slack, 4.0)  # コマンド速度が大きいときはyawのペナルティを緩和する
 
 
     # Compute potential:
@@ -417,7 +486,10 @@ def knee_limit_lower(env: ManagerBasedRLEnv, knee_limit_angle: float = 0.0) -> t
     return total_violation.squeeze(-1)
 
 
-def feet_parallel_to_ground(env: ManagerBasedRLEnv, sigma: float = 0.3, discount_factor: float = 0.99) -> torch.Tensor:
+def feet_parallel_to_ground(env: ManagerBasedRLEnv, 
+                            sigma: float = 0.3,
+                            enable_potential: bool = True, 
+                            discount_factor: float = 0.99) -> torch.Tensor:
     """Reward feet being parallel to the ground.
 
     This function rewards the agent for keeping its feet parallel to the ground.
@@ -444,6 +516,10 @@ def feet_parallel_to_ground(env: ManagerBasedRLEnv, sigma: float = 0.3, discount
     # Convert quaternions to euler angles (roll, pitch, yaw)
     left_roll, left_pitch, _ = euler_xyz_from_quat(left_foot_quat)
     right_roll, right_pitch, _ = euler_xyz_from_quat(right_foot_quat)
+    left_roll = wrap_to_pi(left_roll)
+    right_roll = wrap_to_pi(right_roll)
+    left_pitch = wrap_to_pi(left_pitch)
+    right_pitch = wrap_to_pi(right_pitch)
 
     # Compute squared errors for pitch and roll
     # When feet are parallel to ground, both pitch and roll should be ~0
@@ -455,16 +531,31 @@ def feet_parallel_to_ground(env: ManagerBasedRLEnv, sigma: float = 0.3, discount
 
     current_potential = torch.exp(-total_error / sigma)
 
-    buffer_key = "feet_parallel_to_ground_potential_prev"
-    if not hasattr(env, "_custom_buffers"):
-        env._custom_buffers = {}
-    if buffer_key not in env._custom_buffers:
+    # send_data_stream({
+    #     "left_foot_error": left_foot_error[0],
+    #     "left_pitch": left_pitch[0],
+    #     "left_roll": left_roll[0],
+    #     "right_foot_error": right_foot_error[0],
+    #     "right_pitch": right_pitch[0],
+    #     "right_roll": right_roll[0],
+    #     "total_foot_error": total_error[0],
+    #     "value": current_potential[0]
+    # })
+
+
+    if enable_potential:
+        buffer_key = "feet_parallel_to_ground_potential_prev"
+        if not hasattr(env, "_custom_buffers"):
+            env._custom_buffers = {}
+        if buffer_key not in env._custom_buffers:
+            env._custom_buffers[buffer_key] = current_potential.clone()
+        prev_potential = env._custom_buffers[buffer_key]
+        shaped_reward = discount_factor * current_potential - prev_potential
+        reset_mask = env.reset_buf > 0
+        shaped_reward = torch.where(reset_mask, torch.zeros_like(shaped_reward), shaped_reward)
         env._custom_buffers[buffer_key] = current_potential.clone()
-    prev_potential = env._custom_buffers[buffer_key]
-    shaped_reward = discount_factor * current_potential - prev_potential
-    reset_mask = env.reset_buf > 0
-    shaped_reward = torch.where(reset_mask, torch.zeros_like(shaped_reward), shaped_reward)
-    env._custom_buffers[buffer_key] = current_potential.clone()
+    else:
+        shaped_reward = current_potential
 
     return shaped_reward
 
@@ -516,7 +607,7 @@ def _expected_foot_height_bezier(phi: torch.Tensor, swing_height: float, stance_
 def feet_height_bezier(env: ManagerBasedRLEnv, 
                         swing_height: float = 0.09, 
                         sigma: float = 0.08, 
-                        stance_ratio: float = 0.6,
+                        stance_ratio: float = 0.5,
                         ground_height: float = 0.02) -> torch.Tensor:
     asset = env.scene["robot"]
 
@@ -562,7 +653,9 @@ def feet_height_bezier(env: ManagerBasedRLEnv,
 
     # Combine errors and apply exponential reward
     total_error = error_left + error_right
-    # send_data_stream({"rz_left": rz_left[0],
+    # send_data_stream({
+    #                   "phase": phase[0].tolist(),
+    #                   "rz_left": rz_left[0],
     #                   "rz_right": rz_right[0],
     #                   "left_foot_height": left_foot_height[0],
     #                   "right_foot_height": right_foot_height[0],

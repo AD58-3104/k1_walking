@@ -56,8 +56,8 @@ class modify_reward_weight_by_episode_length(ManagerTermBase):
         self.init_weight: float = self._term_cfg.weight
         self.level_down_threshold = float(params.get("level_down_threshold", 150.0))
         self.level_up_threshold = float(params.get("level_up_threshold", 750.0))
-        self.degree = float(params.get("degree", 0.001))
-        self.current_scale = float(params.get("initial_scale", 0.0))
+        self.degree = float(params.get("degree", 0.00025))
+        self.current_scale = float(params.get("initial_scale", 0.4))
         self.min_scale = float(params.get("min_scale", 0.0))
         self.max_scale = float(params.get("max_scale", 1.0))
         base_num_compute_average_epl = float(params.get("num_compute_average_epl", 1000.0))
@@ -113,6 +113,51 @@ class modify_reward_weight_by_episode_length(ManagerTermBase):
 
         self.current_scale = min(max(self.current_scale, self.min_scale), self.max_scale)
         self._term_cfg.weight = self.init_weight + self.current_scale * (target_weight - self.init_weight)
+        env.reward_manager.set_term_cfg(term_name, self._term_cfg)
+        return self._term_cfg.weight
+
+class modify_reward_weight_by_episode_length_linearly(ManagerTermBase):
+    """
+    指定したスタートステップ以降、指定した終了ステップまで、
+    各環境のエピソードの最大長の平均に応じて
+    報酬の重みを指定した値まで増加させるカリキュラム
+    """
+
+    def __init__(self, cfg: CurriculumTermCfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+
+        # obtain term configuration
+        term_name = cfg.params["term_name"]
+        self._term_cfg = env.reward_manager.get_term_cfg(term_name)
+        self.max_episode_length: int = env.max_episode_length
+        self.init_weight: float = self._term_cfg.weight
+        self.max_episode_length_buf = torch.zeros(env.num_envs, dtype=torch.int32, device=env.device)
+        self.current_step: int = 0
+
+
+    def __call__(
+        self,
+        env: ManagerBasedRLEnv,
+        env_ids: Sequence[int],
+        term_name: str,
+        target_weight: float,
+        init_levelup_threshold: int = 700,   # このエピソードに達するまでは重みを変更しない
+        discard_first_n_steps: int = 100,    # 最初のnステップは平均エピソード長の計算から除外する(なんかlength_bufがおかしいので)
+    ) -> float:
+        # 指定ステップまで捨てる
+        if self.current_step < discard_first_n_steps:
+            self.current_step += 1
+            return self._term_cfg.weight
+        if hasattr(env, "episode_length_buf"):
+            # self.max_episode_length_buf = torch.maximum(self.max_episode_length_buf, env.episode_length_buf)
+            self.max_episode_length_buf = env.episode_length_buf
+        else:
+            self.max_episode_length_buf = torch.zeros_like(self.max_episode_length_buf)
+        average_episode_length = self.max_episode_length_buf.float().mean()
+        if average_episode_length < init_levelup_threshold:
+            return self._term_cfg.weight
+        progress = average_episode_length / self.max_episode_length
+        self._term_cfg.weight = self.init_weight + progress * (target_weight - self.init_weight)
         env.reward_manager.set_term_cfg(term_name, self._term_cfg)
         return self._term_cfg.weight
 

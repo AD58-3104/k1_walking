@@ -8,8 +8,11 @@
 """Launch Isaac Sim Simulator first."""
 
 import argparse
+import os
+from pathlib import Path
 
 from isaaclab.app import AppLauncher
+import isaaclab.app.app_launcher as app_launcher_module
 
 # local imports
 import cli_args  # isort: skip
@@ -33,11 +36,123 @@ parser.add_argument("--log_data", action="store_true", default=False, help="Enab
 parser.add_argument("--log_steps", type=int, default=5000, help="Maximum number of steps to log.")
 parser.add_argument("--log_env_ids", type=str, default="0", help="Comma-separated environment IDs to log (e.g., '0,1,2').")
 parser.add_argument("--log_output_dir", type=str, default="review/play_data", help="Directory to save logged data.")
+parser.add_argument(
+    "--streaming-mode",
+    "--streaming_mode",
+    dest="streaming_mode",
+    type=str,
+    choices=("off", "public", "private"),
+    default=None,
+    help="Launch Isaac Lab with WebRTC streaming: off/public/private.",
+)
 # append FastSAC cli arguments
 cli_args.add_fast_sac_args(parser)
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
+
+if args_cli.streaming_mode is not None:
+    args_cli.livestream = {"off": 0, "public": 1, "private": 2}[args_cli.streaming_mode]
+
+
+def _configure_rendering_env(args: argparse.Namespace) -> None:
+    """Prefer NVIDIA EGL/Vulkan for headless rendering and streaming."""
+    livestream_enabled = getattr(args, "livestream", -1) in {1, 2}
+    if not (args.headless or args.video or livestream_enabled):
+        return
+
+    # Avoid the X/GLX path in headless/streaming runs.
+    os.environ.pop("DISPLAY", None)
+    os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
+    os.environ.setdefault("__GLX_VENDOR_LIBRARY_NAME", "nvidia")
+
+    nvidia_icd = Path("/usr/share/vulkan/icd.d/nvidia_icd.json")
+    if nvidia_icd.is_file():
+        current_icd = os.environ.get("VK_ICD_FILENAMES", "")
+        if "nvidia_icd.json" not in current_icd:
+            os.environ["VK_ICD_FILENAMES"] = str(nvidia_icd)
+        current_driver_files = os.environ.get("VK_DRIVER_FILES", "")
+        if "nvidia_icd.json" not in current_driver_files:
+            os.environ["VK_DRIVER_FILES"] = str(nvidia_icd)
+
+    # Prevent Mesa's implicit device-selection layer from reordering Vulkan devices.
+    os.environ.setdefault("NODEVICE_SELECT", "1")
+    os.environ.setdefault("VK_LOADER_LAYERS_DISABLE", "*MESA*")
+
+
+_configure_rendering_env(args_cli)
+
+if getattr(args_cli, "livestream", -1) in {1, 2}:
+    args_cli.headless = True
+    args_cli.enable_cameras = True
+    if args_cli.streaming_mode is not None:
+        # Use the official Isaac Sim streaming experience instead of the generic Isaac Lab rendering app.
+        args_cli.livestream = 0
+        if not args_cli.experience:
+            args_cli.experience = "isaacsim.exp.full.streaming.kit"
+    elif not args_cli.experience:
+        args_cli.experience = "isaaclab.python.headless.rendering.kit"
+
+    extra_kit_args = [
+        "--/app/vulkan=true",
+        "--no-window",
+        "--/renderer/multiGpu/enabled=false",
+        "--/renderer/multiGpu/autoEnable=false",
+        "--/renderer/multiGpu/maxGpuCount=1",
+        "--/renderer/activeGpu=0",
+    ]
+    existing_kit_args = args_cli.kit_args.split()
+    for extra_arg in extra_kit_args:
+        if extra_arg not in existing_kit_args:
+            existing_kit_args.append(extra_arg)
+    args_cli.kit_args = " ".join(existing_kit_args)
+
+
+def _patch_rendering_mode_fallback() -> None:
+    """Allow AppLauncher to find Isaac Lab rendering presets from Isaac Sim experiences."""
+    original_set_rendering_mode_settings = AppLauncher._set_rendering_mode_settings
+    isaaclab_rendering_dir = Path(app_launcher_module.__file__).resolve().parents[4] / "apps" / "rendering_modes"
+
+    def _set_rendering_mode_settings_with_fallback(self, launcher_args: dict) -> None:
+        import carb
+        import flatdict
+        import toml
+        from isaacsim.core.utils.carb import set_carb_setting
+
+        rendering_mode = launcher_args.get("rendering_mode")
+        if not self._enable_cameras and rendering_mode is None:
+            return
+        if rendering_mode is None:
+            rendering_mode = "balanced"
+
+        rendering_mode_explicitly_passed = launcher_args.pop("rendering_mode_explicit", False)
+        if self._xr and not rendering_mode_explicitly_passed:
+            rendering_mode = "xr"
+            launcher_args["rendering_mode"] = "xr"
+
+        repo_path = Path(carb.tokens.get_tokens_interface().resolve("${app}")).resolve().parent
+        preset_filename = repo_path / "apps" / "rendering_modes" / f"{rendering_mode}.kit"
+        if not preset_filename.is_file():
+            fallback_filename = isaaclab_rendering_dir / f"{rendering_mode}.kit"
+            if fallback_filename.is_file():
+                preset_filename = fallback_filename
+            else:
+                return original_set_rendering_mode_settings(self, launcher_args)
+
+        with open(preset_filename) as file:
+            preset_dict = toml.load(file)
+        preset_dict = dict(flatdict.FlatDict(preset_dict, delimiter="."))
+
+        carb_setting = carb.settings.get_settings()
+        for key, value in preset_dict.items():
+            key = "/" + key.replace(".", "/")
+            set_carb_setting(carb_setting, key, value)
+
+    AppLauncher._set_rendering_mode_settings = _set_rendering_mode_settings_with_fallback
+
+
+_patch_rendering_mode_fallback()
+
 # always enable cameras to record video
 if args_cli.video:
     args_cli.enable_cameras = True
@@ -62,7 +177,7 @@ from isaaclab.utils.dict import print_dict
 from isaaclab.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
 
 # Import FastSAC components
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../holosoma/holosoma/src/isaaclab_fast_sac"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../FastSAC_standalone/isaaclab_fast_sac"))
 from isaaclab_fast_sac import FastSacRunner, FastSacRunnerCfg, FastSacVecEnvWrapper
 
 import isaaclab_tasks  # noqa: F401
@@ -153,6 +268,12 @@ def main():
     # reset environment
     obs = env.get_observations()
     timestep = 0
+    livestream_enabled = getattr(args_cli, "streaming_mode", None) in {"public", "private"} or getattr(
+        args_cli, "livestream", -1
+    ) in {1, 2}
+
+    if livestream_enabled:
+        env.unwrapped.render()
 
     # initialize progress bar if logging is enabled
     pbar = None
@@ -168,6 +289,8 @@ def main():
             actions = policy(obs)
             # env stepping
             obs, _, _, _ = env.step(actions)
+            if livestream_enabled:
+                env.unwrapped.render()
 
         # log data if enabled
         if logger is not None:
