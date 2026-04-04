@@ -305,7 +305,7 @@ class K1Rewards:
     )
 
     feet_height_bezier = RewTerm(
-        func=mdp.feet_height_bezier, weight=8.0,
+        func=mdp.feet_height_bezier, weight=5.0,
         params={
             "sigma": 0.08,
             "swing_height": 0.09,
