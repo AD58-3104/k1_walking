@@ -1,6 +1,6 @@
 # autoresearch
 
-This is an experiment to have the LLM do its own research.
+Booster-K1ロボットを対象として、歩行タスクを行うSACによる強化学習をllmに最適化させる。対象ロボットは、下半身の全ての関節と、上半身の肩の左右のピッチ関節とロール関節を動かして、安定して速度に追従する歩行を学習することを目的とする。
 
 ## Setup
 
