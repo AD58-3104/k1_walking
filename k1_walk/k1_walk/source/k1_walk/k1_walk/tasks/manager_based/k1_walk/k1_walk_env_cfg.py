@@ -29,7 +29,6 @@ from isaaclab.actuators import  IdealPDActuatorCfg
 from . import mdp
 from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
 
-import math
 
 from pathlib import Path
 
@@ -294,7 +293,7 @@ class K1Rewards:
     # ------------- タスク報酬
     track_lin_vel_xy_exp = RewTerm(
         func=mdp.track_lin_vel_xy_yaw_frame_exp,
-        weight=2.0,
+        weight=3.0,
         params={"command_name": "base_velocity", "std": 0.25},
     )
 
@@ -315,7 +314,7 @@ class K1Rewards:
 
     alive_bonus = RewTerm(
         func=mdp.is_alive,
-        weight= 5.0,
+        weight= 7.0,
     )
 
     # ------------- ビヘイビア報酬
