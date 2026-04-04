@@ -342,7 +342,7 @@ class K1Rewards:
 
     joint_regularization_potential = RewTerm(
         func=mdp.joint_reqularization_potential,
-        weight=2.5e-4,
+        weight=1.5e-4,
         params={
             "sigma": 0.15,
             "pitch_slack": [0.01, 0.01, 5.0], # hip_pitch, knee_pitch, ankle_pitch
