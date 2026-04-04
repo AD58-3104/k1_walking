@@ -644,6 +644,7 @@ class TerminationsCfg:
         params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=["Trunk"]), "threshold": 1.0},
     )
 
+    # Do not modify this parameter!!!! 
     root_height_low = DoneTerm(
         func=mdp.root_height_below_minimum,
         params={"asset_cfg": SceneEntityCfg("robot", body_names="Trunk"), "minimum_height": 0.4},
