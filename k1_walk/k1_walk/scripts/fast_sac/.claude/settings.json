@@ -20,6 +20,8 @@
       "Bash(nvidia-smi *)",
       "Bash(tensorboard *)",
       "Bash(bash train_for_llm.sh)",
+      "Bash(source *)",
+      "Bash(grep *)",
       "Read(.*)",
       "Edit(./k1_walk_env_cfg.py)",
       "Edit(./fast_sac_cfg.py)"

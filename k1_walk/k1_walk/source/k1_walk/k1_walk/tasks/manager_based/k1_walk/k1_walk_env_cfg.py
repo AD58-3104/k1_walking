@@ -584,7 +584,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="Trunk"),
-            "mass_distribution_params": (-3.0, 3.0),
+            "mass_distribution_params": (-0.5, 0.5),
             "operation": "add",
         },
     )
@@ -595,8 +595,8 @@ class EventCfg:
         mode="reset",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="Trunk"),
-            "force_range": (-1.5, 1.5),
-            "torque_range": (-0.5, 0.5),
+            "force_range": (-0.3, 0.3),
+            "torque_range": (-0.3, 0.3),
         },
     )
 
@@ -606,12 +606,12 @@ class EventCfg:
         params={
             "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (-3.14, 3.14)},
             "velocity_range": {
-                "x": (-0.5, 0.5),
-                "y": (-0.5, 0.5),
-                "z": (-0.5, 0.5),
-                "roll": (-0.15, 0.15),
-                "pitch": (-0.15, 0.15),
-                "yaw": (-0.5, 0.5),
+                "x": (0.0, 0.0),
+                "y": (0.0, 0.0),
+                "z": (0.0, 0.0),
+                "roll": (0.0, 0.0),
+                "pitch": (0.0, 0.0),
+                "yaw": (0.0, 0.0),
             },
         },
     )
@@ -620,7 +620,7 @@ class EventCfg:
         func=mdp.reset_joints_by_scale,
         mode="reset",
         params={
-            "position_range": (0.90, 1.10),   # これは減らした方が良いのかもしれない
+            "position_range": (0.95, 1.05),
             "velocity_range": (0.0, 0.0),
         },
     )
@@ -629,8 +629,8 @@ class EventCfg:
     push_robot = EventTerm(
         func=mdp.push_by_setting_velocity,
         mode="interval",
-        interval_range_s=(5.0, 10.0),
-        params={"velocity_range": {"x": (-1.0, 1.0), "y": (-1.0, 1.0)}},
+        interval_range_s=(10.0, 15.0),
+        params={"velocity_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5)}},
     )
 
 @configclass
