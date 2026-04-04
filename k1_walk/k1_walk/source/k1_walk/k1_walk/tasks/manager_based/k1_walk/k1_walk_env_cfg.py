@@ -295,7 +295,7 @@ class K1Rewards:
     track_lin_vel_xy_exp = RewTerm(
         func=mdp.track_lin_vel_xy_yaw_frame_exp,
         weight=3.0,
-        params={"command_name": "base_velocity", "std": 0.2},
+        params={"command_name": "base_velocity", "std": 0.25},
     )
 
     track_ang_vel_z_exp = RewTerm(
@@ -373,7 +373,7 @@ class K1Rewards:
     # )
 
     feet_air_time = RewTerm(
-        func=mdp.feet_air_time, weight=5.0,
+        func=mdp.feet_air_time, weight=8.0,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
             "command_name": "base_velocity",
