@@ -308,7 +308,7 @@ class K1Rewards:
         func=mdp.feet_height_bezier, weight=5.0,
         params={
             "sigma": 0.08,
-            "swing_height": 0.12,
+            "swing_height": 0.09,
             "stance_ratio": 0.40,
         },
     )  # メモ：報酬は遊脚のみ与えるようにするとか.
