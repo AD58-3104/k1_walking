@@ -463,7 +463,8 @@ class CurriculumCfg:
         func=mdp.modify_reward_weight_by_episode_length_linearly,
         params = {
             "term_name" : "orientation_potential",
-            "target_weight" : -5.0
+            "target_weight" : -5.0,
+            "init_levelup_threshold" : 100,
         }
     )
 
@@ -472,7 +473,7 @@ class CurriculumCfg:
         params = {
             "term_name" : "joint_regularization_potential",
             "target_weight" : 3.0e-4,
-            "init_levelup_threshold" : 200,
+            "init_levelup_threshold" : 100,
         }
     )
 
@@ -480,7 +481,8 @@ class CurriculumCfg:
         func=mdp.modify_reward_weight_by_episode_length_linearly,
         params = {
             "term_name" : "feet_parallel_to_ground",
-            "target_weight" : 10.0, 
+            "target_weight" : 10.0,
+            "init_levelup_threshold" : 100,
         }
     )
 
@@ -488,21 +490,24 @@ class CurriculumCfg:
         func=mdp.modify_reward_weight_by_episode_length_linearly,
         params = {
             "term_name" : "action_rate_l2_legs",
-            "target_weight" : -1.7 ,
+            "target_weight" : -1.7,
+            "init_levelup_threshold" : 100,
         })
 
     action_rate_arms_cur = CurrTerm(
         func=mdp.modify_reward_weight_by_episode_length_linearly,
         params = {
             "term_name" : "action_rate_l2_arms",
-            "target_weight" : -0.7 * 0.5,
+            "target_weight" : -0.35,
+            "init_levelup_threshold" : 100,
         })
-    
+
     base_jerk_cur = CurrTerm(
         func=mdp.modify_reward_weight_by_episode_length_linearly,
         params = {
             "term_name" : "base_jerk",
             "target_weight" : -0.03,
+            "init_levelup_threshold" : 100,
         }
     )
 
@@ -510,7 +515,8 @@ class CurriculumCfg:
         func=mdp.modify_reward_weight_by_episode_length_linearly,
         params = {
             "term_name" : "ang_vel_xy_l2",
-            "target_weight" : -0.22 * 0.5,
+            "target_weight" : -0.11,
+            "init_levelup_threshold" : 100,
         }
     )
 
@@ -526,7 +532,8 @@ class CurriculumCfg:
         func=mdp.modify_reward_weight_by_episode_length_linearly,
         params = {
             "term_name" : "lin_vel_z_pen",
-            "target_weight" : -25.0 * 0.5,
+            "target_weight" : -12.5,
+            "init_levelup_threshold" : 100,
         }
     )
 
@@ -534,7 +541,8 @@ class CurriculumCfg:
         func=mdp.modify_reward_weight_by_episode_length_linearly,
         params = {
             "term_name" : "feet_close_penalty",
-            "target_weight" : -20.0 * 0.5,
+            "target_weight" : -10.0,
+            "init_levelup_threshold" : 100,
         }
     )
 
@@ -559,6 +567,7 @@ class CurriculumCfg:
         params = {
             "term_name" : "upper_body_joint_regularization",
             "target_weight" : 2e-4,
+            "init_levelup_threshold" : 100,
         }
     )
 
