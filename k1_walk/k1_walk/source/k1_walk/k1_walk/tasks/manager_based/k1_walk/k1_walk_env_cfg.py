@@ -308,14 +308,14 @@ class K1Rewards:
         func=mdp.feet_height_bezier, weight=5.0,
         params={
             "sigma": 0.08,
-            "swing_height": 0.09,
+            "swing_height": 0.12,
             "stance_ratio": 0.40,
         },
     )  # メモ：報酬は遊脚のみ与えるようにするとか.
 
     alive_bonus = RewTerm(
         func=mdp.is_alive,
-        weight= 15.0,
+        weight= 10.0,
     )
 
     # ------------- ビヘイビア報酬
