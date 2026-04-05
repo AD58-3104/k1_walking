@@ -236,23 +236,31 @@ class ObservationsCfg:
         # observation terms (order preserved)
         joint_pos = ObsTerm(func=mdp.joint_pos_rel, noise=Unoise(n_min=-0.01, n_max=0.01))
         joint_vel = ObsTerm(func=mdp.joint_vel_rel, noise=Unoise(n_min=-0.03, n_max=0.03))
-        base_ang_vel = ObsTerm(func=mdp.base_ang_vel, noise=Unoise(n_min=-0.2, n_max=0.2))
-        # body_height = ObsTerm(func=mdp.body_height, noise=Unoise(n_min=-0.05, n_max=0.05))
+        base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.1, n_max=0.1))
+        base_ang_vel = ObsTerm(func=mdp.base_ang_vel, noise=Unoise(n_min=-0.07, n_max=0.07))
+        body_height = ObsTerm(func=mdp.body_height, noise=Unoise(n_min=-0.05, n_max=0.05))
         projected_gravity = ObsTerm(
             func=mdp.projected_gravity,
             noise=Unoise(n_min=-0.05, n_max=0.05),
         )
-        # foot_contact_states = ObsTerm(
-        #         func=mdp.feet_contact,
-        #         params={
-        #             "sensor_cfg_right": SceneEntityCfg("contact_foot_right", body_names="right_foot_link"),
-        #             "sensor_cfg_left": SceneEntityCfg("contact_foot_left", body_names="left_foot_link"),
-        #         },
-        #     )
+        foot_contact_states = ObsTerm(
+                func=mdp.feet_contact,
+                params={
+                    "sensor_cfg_right": SceneEntityCfg("contact_foot_right", body_names="right_foot_link"),
+                    "sensor_cfg_left": SceneEntityCfg("contact_foot_left", body_names="left_foot_link"),
+                },
+            )
         velocity_commands = ObsTerm(func=mdp.generated_commands, params={"command_name": "base_velocity"})
         last_action = ObsTerm(func=mdp.last_action)
-        # phase_time = ObsTerm(func=mdp.phase_time) rawなphaseはむしろノイズになる可能性があるらしいです。
+        phase_time = ObsTerm(func=mdp.phase_time)
         sincos_phase = ObsTerm(func=mdp.sincos_phase)
+        foot_height = ObsTerm(
+            func=mdp.foot_height,
+            params={
+                "foot_cfg_right": SceneEntityCfg("robot", body_names="right_foot_link"),
+                "foot_cfg_left": SceneEntityCfg("robot", body_names="left_foot_link"),
+            }
+        )
 
 
         def __post_init__(self):
@@ -315,29 +323,41 @@ class K1Rewards:
 
     alive_bonus = RewTerm(
         func=mdp.is_alive,
-        weight= 10.0,
+        weight=2.0,
     )
 
     # ------------- ビヘイビア報酬
 
-    # bad_gait_penalty = RewTerm(
-    #     func=mdp.bad_gait_penalty,
-    #     weight=-0.0,
-    #     params={
-    #         "min_air_time": 0.3,
-    #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["left_foot_link", "right_foot_link"]),
-    #     }
-    # )
+    # stride_length報酬（ベースラインで重要）
+    stride_length = RewTerm(
+        func=mdp.stride_length_reward,
+        weight=8.0,
+        params={
+            "command_name": "base_velocity",
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
+            "max_stride": 1.0,
+            "max_speed": 1.0,
+            "sigma": 0.25,
+        }
+    )
+
+    bad_gait_penalty = RewTerm(
+        func=mdp.bad_gait_penalty,
+        weight=-2.0,
+        params={
+            "min_air_time": 0.3,
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["left_foot_link", "right_foot_link"]),
+        }
+    )
 
     # ------------- シェイピング報酬（ポテンシャル系）
 
     orientation_potential = RewTerm(
         func=mdp.orientation_potential,
-        weight=-1e-2,
+        weight=1.0,
         params={
-            "sigma": 0.04,
+            "sigma": 0.2,
             "discount_factor": 0.985,
-            "enable_potential": False,
             }
     )
 
@@ -346,8 +366,8 @@ class K1Rewards:
         weight=4.0e-5,
         params={
             "sigma": 0.25,
-            "pitch_slack": [0.01, 0.01, 5.0], # hip_pitch, knee_pitch, ankle_pitch
-            "roll_slack": [1.0, 5.0],  # hip_roll, ankle_roll
+            "pitch_slack": [0.01, 0.01, 5.0],
+            "roll_slack": [1.0, 5.0],
             "yaw_slack": 0.3,
             "enable_exp_func": True,
             "enable_potential": False,
@@ -355,11 +375,9 @@ class K1Rewards:
     )
 
     feet_parallel_to_ground = RewTerm(
-        func=mdp.feet_parallel_to_ground, weight=3.0 * 0.1,
+        func=mdp.feet_parallel_to_ground, weight=3.0,
         params={
             "sigma": 0.1,
-            "discount_factor": 0.985,
-            "enable_potential": True,
                 }
     )
 
@@ -384,7 +402,7 @@ class K1Rewards:
     # ------------- シェイピング報酬（ペナルティ系）
     action_rate_l2_legs = RewTerm(
         func=mdp.action_rate_l2_subset,
-        weight=-0.01,
+        weight=-0.1,
         params={
             "joint_name_patterns": [".*_Hip_.*", ".*_Knee_.*", ".*_Ankle_.*"],
             "action_term_name": "joint_pos",
@@ -393,7 +411,7 @@ class K1Rewards:
 
     action_rate_l2_arms = RewTerm(
         func=mdp.action_rate_l2_subset,
-        weight=-0.01,
+        weight=-0.05,
         params={
             "joint_name_patterns": [".*_Shoulder_.*", ".*_Elbow_.*"],
             "action_term_name": "joint_pos",
@@ -459,115 +477,42 @@ class CurriculumCfg:
     """Curriculum terms for the MDP."""
     terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
 
-    orientation_potential_cur = CurrTerm(
-        func=mdp.modify_reward_weight_by_episode_length_linearly,
-        params = {
-            "term_name" : "orientation_potential",
-            "target_weight" : -5.0,
-            "init_levelup_threshold" : 100,
-        }
-    )
-
-    joint_regularization_potential_cur = CurrTerm(
-        func=mdp.modify_reward_weight_by_episode_length_linearly,
-        params = {
-            "term_name" : "joint_regularization_potential",
-            "target_weight" : 3.0e-4,
-            "init_levelup_threshold" : 100,
-        }
-    )
-
-    feet_parallel_to_ground_cur = CurrTerm(
-        func=mdp.modify_reward_weight_by_episode_length_linearly,
-        params = {
-            "term_name" : "feet_parallel_to_ground",
-            "target_weight" : 10.0,
-            "init_levelup_threshold" : 100,
-        }
-    )
-
+    # ベースラインと同じカリキュラム形式
     action_rate_legs_cur = CurrTerm(
-        func=mdp.modify_reward_weight_by_episode_length_linearly,
+        func=mdp.modify_reward_weight_by_episode_length,
         params = {
             "term_name" : "action_rate_l2_legs",
-            "target_weight" : -1.7,
-            "init_levelup_threshold" : 100,
+            "target_weight" : -2.0,
         })
 
     action_rate_arms_cur = CurrTerm(
-        func=mdp.modify_reward_weight_by_episode_length_linearly,
+        func=mdp.modify_reward_weight_by_episode_length,
         params = {
             "term_name" : "action_rate_l2_arms",
-            "target_weight" : -0.35,
-            "init_levelup_threshold" : 100,
+            "target_weight" : -1.0,
         })
 
     base_jerk_cur = CurrTerm(
-        func=mdp.modify_reward_weight_by_episode_length_linearly,
+        func=mdp.modify_reward_weight_by_episode_length,
         params = {
             "term_name" : "base_jerk",
             "target_weight" : -0.03,
-            "init_levelup_threshold" : 100,
         }
     )
 
-    ang_vel_xy_cur = CurrTerm(
-        func=mdp.modify_reward_weight_by_episode_length_linearly,
+    bad_gait_cur = CurrTerm(
+        func=mdp.modify_reward_weight_by_episode_length,
         params = {
-            "term_name" : "ang_vel_xy_l2",
-            "target_weight" : -0.11,
-            "init_levelup_threshold" : 100,
+            "term_name" : "bad_gait_penalty",
+            "target_weight" : -1.0,
         }
     )
-
-    # body_lin_acc_cur = CurrTerm(
-    #     func=mdp.modify_reward_weight_by_episode_length_linearly,
-    #     params = {
-    #         "term_name" : "body_lin_acc",
-    #         "target_weight" : -1.5e-4 * 0.5,
-    #     }
-    # )
-
-    lin_vel_z_cur = CurrTerm(
-        func=mdp.modify_reward_weight_by_episode_length_linearly,
-        params = {
-            "term_name" : "lin_vel_z_pen",
-            "target_weight" : -12.5,
-            "init_levelup_threshold" : 100,
-        }
-    )
-
-    feet_close_cur = CurrTerm(
-        func=mdp.modify_reward_weight_by_episode_length_linearly,
-        params = {
-            "term_name" : "feet_close_penalty",
-            "target_weight" : -10.0,
-            "init_levelup_threshold" : 100,
-        }
-    )
-
-    # feet_slide_cur = CurrTerm(
-    #     func=mdp.modify_reward_weight_by_episode_length_linearly,
-    #      params = {
-    #         "term_name" : "feet_slide",
-    #         "target_weight" : -0.2 * 0.5,
-    #      }
-    # )
-
-    # joint_acc_cur = CurrTerm(
-    #     func=mdp.modify_reward_weight_by_episode_length_linearly,
-    #     params = {
-    #         "term_name" : "joint_acc",
-    #         "target_weight" : -2.0e-8 * 0.5# -2e-8
-    #     }
-    # )
 
     upper_body_joint_regularization_cur = CurrTerm(
-        func=mdp.modify_reward_weight_by_episode_length_linearly,
+        func=mdp.modify_reward_weight_by_episode_length,
         params = {
             "term_name" : "upper_body_joint_regularization",
             "target_weight" : 2e-4,
-            "init_levelup_threshold" : 100,
         }
     )
 
@@ -661,7 +606,7 @@ class TerminationsCfg:
 
     bad_orientation = DoneTerm(
         func=mdp.bad_orientation,
-        params={"limit_angle": 0.4},
+        params={"limit_angle": 0.2},
     )
 
 
