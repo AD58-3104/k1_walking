@@ -204,11 +204,11 @@ class CommandsCfg:
         resampling_time_range=(10.0, 10.0),
         rel_standing_envs=0.02,
         rel_heading_envs=1.0,
-        heading_command=False,
+        heading_command=True,
         heading_control_stiffness=0.5,
         debug_vis=True,
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.0, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
+            lin_vel_x=(-1.0, 1.0), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-1.0, 1.0), heading=(-3.141592653589793, 3.141592653589793)
         ),
     )
 
@@ -302,7 +302,7 @@ class K1Rewards:
     # ------------- タスク報酬
     track_lin_vel_xy_exp = RewTerm(
         func=mdp.track_lin_vel_xy_yaw_frame_exp,
-        weight=3.0,
+        weight=2.0,
         params={"command_name": "base_velocity", "std": 0.25},
     )
 
@@ -390,32 +390,19 @@ class K1Rewards:
     #     },
     # )
 
-    feet_air_time = RewTerm(
-        func=mdp.feet_air_time, weight=5.0,
-        params={
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
-            "command_name": "base_velocity",
-            "threshold": 0.0,
-        }
-    )
+    # feet_air_time = RewTerm(
+    #     func=mdp.feet_air_time, weight=5.0,
+    #     params={
+    #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
+    #         "command_name": "base_velocity",
+    #         "threshold": 0.0,
+    #     }
+    # )
 
     # ------------- シェイピング報酬（ペナルティ系）
-    action_rate_l2_legs = RewTerm(
-        func=mdp.action_rate_l2_subset,
+    action_rate_l2 = RewTerm(
+        func=mdp.action_rate_l2,
         weight=-0.1,
-        params={
-            "joint_name_patterns": [".*_Hip_.*", ".*_Knee_.*", ".*_Ankle_.*"],
-            "action_term_name": "joint_pos",
-        },
-    )
-
-    action_rate_l2_arms = RewTerm(
-        func=mdp.action_rate_l2_subset,
-        weight=-0.05,
-        params={
-            "joint_name_patterns": [".*_Shoulder_.*", ".*_Elbow_.*"],
-            "action_term_name": "joint_pos",
-        },
     )
 
     base_jerk = RewTerm(
@@ -438,13 +425,13 @@ class K1Rewards:
         weight=-0.5,
     )
 
-    feet_close_penalty = RewTerm(
-        func=mdp.feet_close_penalty,
-        weight=-1.0,
-        params={
-            "feet_distance_threshold": 0.09,
-        }
-    )
+    # feet_close_penalty = RewTerm(
+    #     func=mdp.feet_close_penalty,
+    #     weight=-1.0,
+    #     params={
+    #         "feet_distance_threshold": 0.09,
+    #     }
+    # )
 
     # joint_jerk = RewTerm(
     #     func=mdp.joint_jerk,
@@ -463,33 +450,26 @@ class K1Rewards:
     #     params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Ankle_.*", ".*_Hip_.*", ".*_Knee_.*"])},
     # )
 
-    upper_body_joint_regularization = RewTerm(
-        func=mdp.upper_body_joint_regularization,
-        weight=-1e-4,
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Shoulder_.*", ".*_Elbow_.*"]),
-        }
-    )
+    # upper_body_joint_regularization = RewTerm(
+    #     func=mdp.upper_body_joint_regularization,
+    #     weight=-1e-4,
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Shoulder_.*", ".*_Elbow_.*"]),
+    #     }
+    # )
 
 
 @configclass
 class CurriculumCfg:
     """Curriculum terms for the MDP."""
-    terrain_levels = CurrTerm(func=mdp.terrain_levels_vel)
+    terrain_levels = None  # ベースラインと同じ
 
     # ベースラインと同じカリキュラム形式
-    action_rate_legs_cur = CurrTerm(
+    action_rate_cur = CurrTerm(
         func=mdp.modify_reward_weight_by_episode_length,
         params = {
-            "term_name" : "action_rate_l2_legs",
+            "term_name" : "action_rate_l2",
             "target_weight" : -2.0,
-        })
-
-    action_rate_arms_cur = CurrTerm(
-        func=mdp.modify_reward_weight_by_episode_length,
-        params = {
-            "term_name" : "action_rate_l2_arms",
-            "target_weight" : -1.0,
         })
 
     base_jerk_cur = CurrTerm(
@@ -505,14 +485,6 @@ class CurriculumCfg:
         params = {
             "term_name" : "bad_gait_penalty",
             "target_weight" : -1.0,
-        }
-    )
-
-    upper_body_joint_regularization_cur = CurrTerm(
-        func=mdp.modify_reward_weight_by_episode_length,
-        params = {
-            "term_name" : "upper_body_joint_regularization",
-            "target_weight" : 2e-4,
         }
     )
 
@@ -538,7 +510,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="Trunk"),
-            "mass_distribution_params": (-0.5, 0.5),
+            "mass_distribution_params": (-0.2, 0.2),
             "operation": "add",
         },
     )
