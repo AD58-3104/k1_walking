@@ -208,7 +208,7 @@ class CommandsCfg:
         heading_control_stiffness=0.5,
         debug_vis=True,
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(-1.0, 1.0), lin_vel_y=(-1.0, 1.0), ang_vel_z=(-1.0, 1.0), heading=(-3.141592653589793, 3.141592653589793)
+            lin_vel_x=(0.0, 0.8), lin_vel_y=(-0.3, 0.3), ang_vel_z=(-0.5, 0.5), heading=(-3.141592653589793, 3.141592653589793)
         ),
     )
 
@@ -323,7 +323,7 @@ class K1Rewards:
 
     alive_bonus = RewTerm(
         func=mdp.is_alive,
-        weight=2.0,
+        weight=8.0,
     )
 
     # ------------- ビヘイビア報酬
@@ -331,7 +331,7 @@ class K1Rewards:
     # stride_length報酬（ベースラインで重要）
     stride_length = RewTerm(
         func=mdp.stride_length_reward,
-        weight=8.0,
+        weight=12.0,
         params={
             "command_name": "base_velocity",
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
@@ -354,7 +354,7 @@ class K1Rewards:
 
     orientation_potential = RewTerm(
         func=mdp.orientation_potential,
-        weight=1.0,
+        weight=2.0,
         params={
             "sigma": 0.2,
             "discount_factor": 0.985,
