@@ -380,7 +380,7 @@ class K1Rewards:
 
     terminate_penalty = RewTerm(
         func=mdp.is_terminated,
-        weight=-100.0,
+        weight=-10.0,
     )
 
     orientation_potential = RewTerm(
