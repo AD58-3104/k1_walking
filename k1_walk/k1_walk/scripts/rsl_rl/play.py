@@ -8,6 +8,7 @@
 """Launch Isaac Sim Simulator first."""
 
 import argparse
+import os
 
 from isaaclab.app import AppLauncher
 
@@ -42,6 +43,30 @@ args_cli = parser.parse_args()
 if args_cli.video:
     args_cli.enable_cameras = True
 
+
+def _configure_single_gpu_rendering(args: argparse.Namespace) -> None:
+    """Force Isaac Sim renderer to stay on a single selected GPU."""
+    extra_kit_args = [
+        "--/renderer/multiGpu/enabled=false",
+        "--/renderer/multiGpu/autoEnable=false",
+        "--/renderer/multiGpu/maxGpuCount=1",
+    ]
+    if isinstance(args.device, str):
+        if args.device.startswith("cuda:"):
+            gpu_index = args.device.split(":", 1)[1]
+            extra_kit_args.append(f"--/renderer/activeGpu={gpu_index}")
+        elif args.device == "cuda":
+            extra_kit_args.append("--/renderer/activeGpu=0")
+
+    existing_kit_args = args.kit_args.split()
+    for extra_arg in extra_kit_args:
+        if extra_arg not in existing_kit_args:
+            existing_kit_args.append(extra_arg)
+    args.kit_args = " ".join(existing_kit_args)
+
+
+_configure_single_gpu_rendering(args_cli)
+
 # launch omniverse app
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
@@ -49,7 +74,6 @@ simulation_app = app_launcher.app
 """Rest everything follows."""
 
 import gymnasium as gym
-import os
 import time
 import torch
 from tqdm import tqdm

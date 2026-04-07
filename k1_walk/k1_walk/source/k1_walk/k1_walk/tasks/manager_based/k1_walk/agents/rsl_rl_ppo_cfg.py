@@ -5,13 +5,13 @@
 
 from isaaclab.utils import configclass
 
-from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg
+from isaaclab_rl.rsl_rl import RslRlOnPolicyRunnerCfg, RslRlPpoActorCriticCfg, RslRlPpoAlgorithmCfg, RslRlSymmetryCfg
 
 
 @configclass
 class G1RoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
-    max_iterations = 25000
+    max_iterations = 3000
     save_interval = 100
     experiment_name = "g1_rough"
     empirical_normalization = False
@@ -35,6 +35,9 @@ class G1RoughPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         desired_kl=0.01,
         max_grad_norm=1.0,
     )
+    # symmetry = RslRlSymmetryCfg(
+    #     use_data_augmentation=True,
+    # )
 
 
 @configclass

@@ -154,6 +154,7 @@ def orientation_potential(env: ManagerBasedRLEnv,
                           sigma: float = 0.5 , 
                           discount_factor: float = 0.99,
                           enable_potential: bool = True,
+                          enable_exp_func: bool = False,
                           ) -> torch.Tensor:
     """
     Potential-based reward shaping for maintaining upright orientation.
@@ -190,10 +191,13 @@ def orientation_potential(env: ManagerBasedRLEnv,
     # ロボットが完全に直立している時、upright_vector = [0, 0, 1] なので potential = 1
     # ロボットが傾くと、ux, uy が増加し、potential が減少
     err_value = torch.square(upright_vector[:, 0]) + torch.square(upright_vector[:, 1])
-    current_potential = torch.exp(-err_value / sigma)
+    if enable_exp_func:
+        current_potential = torch.exp(-err_value / sigma)
+    else:
+        current_potential = -err_value / sigma
 
     if not enable_potential:
-        return err_value
+        return current_potential
 
     # send_data_stream({"ux": upright_vector[0, 0],
     #                   "uy": upright_vector[0, 1],

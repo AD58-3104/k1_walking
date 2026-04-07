@@ -27,7 +27,8 @@ from isaaclab.actuators import  IdealPDActuatorCfg
 
 # ローカルのmdpモジュールをインポート（カスタム関数 + 標準mdp関数を含む）
 from . import mdp
-from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
+from isaaclab.terrains.terrain_generator_cfg import TerrainGeneratorCfg
+import isaaclab.terrains as terrain_gen 
 
 import math
 
@@ -140,6 +141,52 @@ BOOSTER_K1_CFG = ArticulationCfg(
     },
 )
 
+ROUGH_TERRAINS_CFG_ORIG = TerrainGeneratorCfg(
+    size=(8.0, 8.0),
+    border_width=20.0,
+    num_rows=10,
+    num_cols=20,
+    horizontal_scale=0.1,
+    vertical_scale=0.005,
+    slope_threshold=0.75,
+    use_cache=False,
+    sub_terrains={
+        # ピラミッド階段は不要なので消す
+        # "pyramid_stairs": terrain_gen.MeshPyramidStairsTerrainCfg(
+        #     proportion=0.2,
+        #     step_height_range=(0.05, 0.23),
+        #     step_width=0.3,
+        #     platform_width=3.0,
+        #     border_width=1.0,
+        #     holes=False,
+        # ),
+        # 逆ピラミッド階段も不要なので消す
+        # "pyramid_stairs_inv": terrain_gen.MeshInvertedPyramidStairsTerrainCfg(  
+        #     proportion=0.2,
+        #     step_height_range=(0.05, 0.23),
+        #     step_width=0.3,
+        #     platform_width=3.0,
+        #     border_width=1.0,
+        #     holes=False,
+        # ),
+        "boxes": terrain_gen.MeshRandomGridTerrainCfg(
+            proportion=0.5, grid_width=0.45, grid_height_range=(0.05, 0.2), platform_width=2.0
+        ),
+        "random_rough": terrain_gen.HfRandomUniformTerrainCfg(
+            proportion=0.5, noise_range=(0.02, 0.10), noise_step=0.02, border_width=0.25
+        ),
+
+        # ピラミッドスロープも不要
+        # "hf_pyramid_slope": terrain_gen.HfPyramidSlopedTerrainCfg(
+        #     proportion=0.1, slope_range=(0.0, 0.4), platform_width=2.0, border_width=0.25
+        # ),
+        # "hf_pyramid_slope_inv": terrain_gen.HfInvertedPyramidSlopedTerrainCfg(
+        #     proportion=0.1, slope_range=(0.0, 0.4), platform_width=2.0, border_width=0.25
+        # ),
+    },
+)
+
+
 @configclass
 class MySceneCfg(InteractiveSceneCfg):
     """Configuration for the terrain scene with a legged robot."""
@@ -148,7 +195,7 @@ class MySceneCfg(InteractiveSceneCfg):
     terrain = TerrainImporterCfg(
         prim_path="/World/ground",
         terrain_type="generator",
-        terrain_generator=ROUGH_TERRAINS_CFG,
+        terrain_generator=ROUGH_TERRAINS_CFG_ORIG,
         max_init_terrain_level=5,
         collision_group=-1,
         physics_material=sim_utils.RigidBodyMaterialCfg(
@@ -167,14 +214,14 @@ class MySceneCfg(InteractiveSceneCfg):
     # robots
     robot: ArticulationCfg = MISSING
     # sensors
-    height_scanner = RayCasterCfg(
-        prim_path="{ENV_REGEX_NS}/Robot/base",
-        offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
-        attach_yaw_only=True,
-        pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
-        debug_vis=False,
-        mesh_prim_paths=["/World/ground"],
-    )
+    # height_scanner = RayCasterCfg(
+    #     prim_path="{ENV_REGEX_NS}/Robot/base",
+    #     offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
+    #     attach_yaw_only=True,
+    #     pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
+    #     debug_vis=False,
+    #     mesh_prim_paths=["/World/ground"],
+    # )
     contact_forces = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True)
     # lights
     sky_light = AssetBaseCfg(
@@ -315,7 +362,7 @@ class K1Rewards:
 
     alive_bonus = RewTerm(
         func=mdp.is_alive,
-        weight= 5.0,
+        weight= 10.0,
     )
 
     # ------------- ビヘイビア報酬
@@ -331,19 +378,25 @@ class K1Rewards:
 
     # ------------- シェイピング報酬（ポテンシャル系）
 
+    terminate_penalty = RewTerm(
+        func=mdp.is_terminated,
+        weight=-100.0,
+    )
+
     orientation_potential = RewTerm(
         func=mdp.orientation_potential,
-        weight=-1e-2,
+        weight=20.0,
         params={
-            "sigma": 0.04, 
+            "sigma": 0.05, 
             "discount_factor": 0.985,
-            "enable_potential": False, # falseにするとexpが無効になる
+            "enable_potential": True,
+            "enable_exp_func": False,  # expはオフにした
             }
     )
 
     joint_regularization_potential = RewTerm(
         func=mdp.joint_reqularization_potential, 
-        weight=5.0e-4,
+        weight=7.0e-3,
         params={
             "sigma": 0.15,
             "pitch_slack": [0.01, 0.01, 5.0], # hip_pitch, knee_pitch, ankle_pitch
@@ -355,7 +408,7 @@ class K1Rewards:
     )
 
     feet_parallel_to_ground = RewTerm(
-        func=mdp.feet_parallel_to_ground, weight=3.0 * 0.1,
+        func=mdp.feet_parallel_to_ground, weight=2.5,
         params={
             "sigma": 0.1,
             "discount_factor": 0.985,
@@ -384,7 +437,7 @@ class K1Rewards:
     # ------------- シェイピング報酬（ペナルティ系）
     action_rate_l2_legs = RewTerm(
         func=mdp.action_rate_l2_subset,
-        weight=-0.1,
+        weight=-0.8,
         params={
             "joint_name_patterns": [".*_Hip_.*", ".*_Knee_.*", ".*_Ankle_.*"],
             "action_term_name": "joint_pos",
@@ -393,21 +446,21 @@ class K1Rewards:
 
     action_rate_l2_arms = RewTerm(
         func=mdp.action_rate_l2_subset,
-        weight=-0.05,
+        weight=-0.3,
         params={
             "joint_name_patterns": [".*_Shoulder_.*", ".*_Elbow_.*"],
             "action_term_name": "joint_pos",
         },
     )
 
-    base_jerk = RewTerm(
-        func=mdp.base_jerk,
-        weight=-0.005,
-    )
+    # base_jerk = RewTerm(
+    #     func=mdp.base_jerk,
+    #     weight=-0.005,
+    # )
 
     ang_vel_xy_l2 = RewTerm(  # まだ追加した事は無いが、将来的に追加するかも
         func=mdp.ang_vel_xy_l2,
-        weight=-0.01
+        weight=-0.4
     )
 
     # body_lin_acc = RewTerm(
@@ -417,12 +470,12 @@ class K1Rewards:
 
     lin_vel_z_pen = RewTerm(
         func=mdp.lin_vel_z_l2,
-        weight=-0.5,
+        weight=-1.5,
     )
 
     feet_close_penalty = RewTerm(
         func=mdp.feet_close_penalty,
-        weight=-1.0,
+        weight=-5.0,
         params={
             "feet_distance_threshold": 0.09,
         }
@@ -447,7 +500,7 @@ class K1Rewards:
 
     upper_body_joint_regularization = RewTerm(
         func=mdp.upper_body_joint_regularization,
-        weight=-1e-4,
+        weight=-1e-1,
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Shoulder_.*", ".*_Elbow_.*"]),
         }
@@ -463,7 +516,7 @@ class CurriculumCfg:
         func=mdp.modify_reward_weight_by_episode_length_linearly,
         params = {
             "term_name" : "orientation_potential",
-            "target_weight" : -5.0
+            "target_weight" : 30.0
         }
     )
 
@@ -471,7 +524,7 @@ class CurriculumCfg:
         func=mdp.modify_reward_weight_by_episode_length_linearly,
         params = {
             "term_name" : "joint_regularization_potential",
-            "target_weight" : 3.0e-3,
+            "target_weight" : 1.0e-2,
             "init_levelup_threshold" : 200,
         }
     )
@@ -480,7 +533,7 @@ class CurriculumCfg:
         func=mdp.modify_reward_weight_by_episode_length_linearly,
         params = {
             "term_name" : "feet_parallel_to_ground",
-            "target_weight" : 10.0, 
+            "target_weight" : 5.0, 
         }
     )
 
@@ -495,22 +548,22 @@ class CurriculumCfg:
         func=mdp.modify_reward_weight_by_episode_length_linearly,
         params = {
             "term_name" : "action_rate_l2_arms",
-            "target_weight" : -0.7 * 0.5,
+            "target_weight" : -0.7,
         })
     
-    base_jerk_cur = CurrTerm(
-        func=mdp.modify_reward_weight_by_episode_length_linearly,
-        params = {
-            "term_name" : "base_jerk",
-            "target_weight" : -0.03,
-        }
-    )
+    # base_jerk_cur = CurrTerm(
+    #     func=mdp.modify_reward_weight_by_episode_length_linearly,
+    #     params = {
+    #         "term_name" : "base_jerk",
+    #         "target_weight" : -0.03,
+    #     }
+    # )
 
     ang_vel_xy_cur = CurrTerm(
         func=mdp.modify_reward_weight_by_episode_length_linearly,
         params = {
             "term_name" : "ang_vel_xy_l2",
-            "target_weight" : -0.22 * 0.5,
+            "target_weight" : -1.0,
         }
     )
 
@@ -522,19 +575,19 @@ class CurriculumCfg:
     #     }
     # )
 
-    lin_vel_z_cur = CurrTerm(
-        func=mdp.modify_reward_weight_by_episode_length_linearly,
-        params = {
-            "term_name" : "lin_vel_z_pen",
-            "target_weight" : -25.0 * 0.5,
-        }
-    )
+    # lin_vel_z_cur = CurrTerm(
+    #     func=mdp.modify_reward_weight_by_episode_length_linearly,
+    #     params = {
+    #         "term_name" : "lin_vel_z_pen",
+    #         "target_weight" : -25.0 * 0.5,
+    #     }
+    # )
 
     feet_close_cur = CurrTerm(
         func=mdp.modify_reward_weight_by_episode_length_linearly,
         params = {
             "term_name" : "feet_close_penalty",
-            "target_weight" : -20.0 * 0.5,
+            "target_weight" : -10.0,
         }
     )
 
@@ -558,7 +611,7 @@ class CurriculumCfg:
         func=mdp.modify_reward_weight_by_episode_length_linearly,
         params = {
             "term_name" : "upper_body_joint_regularization",
-            "target_weight" : 2e-4,
+            "target_weight" : 5e-1,
         }
     )
 
@@ -645,14 +698,14 @@ class TerminationsCfg:
     )
 
     # Do not modify this parameter!!!! 
-    root_height_low = DoneTerm(
-        func=mdp.root_height_below_minimum,
-        params={"asset_cfg": SceneEntityCfg("robot", body_names="Trunk"), "minimum_height": 0.4},
-    )
+    # root_height_low = DoneTerm(
+    #     func=mdp.root_height_below_minimum,
+    #     params={"asset_cfg": SceneEntityCfg("robot", body_names="Trunk"), "minimum_height": 0.2},
+    # )
 
     bad_orientation = DoneTerm(
         func=mdp.bad_orientation,
-        params={"limit_angle": 0.4},
+        params={"limit_angle": math.radians(70)},   # 地面で耐えるのは流石に無し
     )
 
 
@@ -730,8 +783,8 @@ class K1FlatEnvCfg(K1RoughEnvCfg):
         self.scene.terrain.terrain_type = "plane"
         self.scene.terrain.terrain_generator = None
         # no height scan
-        self.scene.height_scanner = None
-        self.observations.policy.height_scan = None
+        # self.scene.height_scanner = None
+        # self.observations.policy.height_scan = None
         # no terrain curriculum
         self.curriculum.terrain_levels = None
 
