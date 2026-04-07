@@ -21,7 +21,7 @@
       "Edit(./k1_walk_env_cfg.py)",
       "Edit(./fast_sac_cfg.py)",
       "Bash(bash train_for_llm.sh)",
-      "Bash(source ~/.bash_functions*)",
+      "Bash(source ~/.bash_functions*)"
     ],
     "ask": [],
     "deny": [
@@ -32,7 +32,7 @@
       "Bash(git remote *)",
       "Bash(rm *)",
       "Bash(pip install *)",
-      "Bash(python *)",
+      "Bash(python *)"
     ]
   },
   "hooks": {
