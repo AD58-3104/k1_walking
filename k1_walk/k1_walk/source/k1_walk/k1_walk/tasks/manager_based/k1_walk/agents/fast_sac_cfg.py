@@ -7,7 +7,7 @@ import sys
 import os
 
 # Add isaaclab_fast_sac to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../../../../scripts/holosoma/holosoma/src/isaaclab_fast_sac"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../../../../scripts/FastSAC_standalone/isaaclab_fast_sac"))
 
 from isaaclab.utils import configclass
 from isaaclab_fast_sac import FastSacRunnerCfg, FastSacAlgorithmCfg

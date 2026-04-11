@@ -59,10 +59,10 @@ from tqdm import tqdm
 from isaaclab.envs import DirectMARLEnv, multi_agent_to_single_agent
 from isaaclab.utils.assets import retrieve_file_path
 from isaaclab.utils.dict import print_dict
-from isaaclab.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
+# from isaaclab.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
 
 # Import FastSAC components
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../holosoma/holosoma/src/isaaclab_fast_sac"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../FastSAC_standalone/isaaclab_fast_sac"))
 from isaaclab_fast_sac import FastSacRunner, FastSacRunnerCfg, FastSacVecEnvWrapper
 
 import isaaclab_tasks  # noqa: F401

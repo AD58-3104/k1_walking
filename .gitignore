@@ -209,3 +209,6 @@ marimo/_lsp/
 __marimo__/
 
 *.usd
+k1_walk/k1_walk/logs/
+k1_walk/k1_walk/outputs/
+k1_walk/k1_walk/歩行改善提案.md
