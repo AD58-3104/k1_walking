@@ -20,4 +20,4 @@ for arg in "$@"; do
     fi
 done
 
-_labpython play.py --task K1-Walk-Play-fast-sac --num_envs 1 --checkpoint $@
+_labpython play.py --task K1-Walk-Play-fast-sac --num_envs 32 --checkpoint $@

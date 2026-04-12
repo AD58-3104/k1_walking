@@ -194,7 +194,7 @@ def orientation_potential(env: ManagerBasedRLEnv,
     if enable_exp_func:
         current_potential = torch.exp(-err_value / sigma)
     else:
-        current_potential = -err_value / sigma
+        current_potential = -err_value
 
     if not enable_potential:
         return current_potential
@@ -304,7 +304,7 @@ def upper_body_joint_regularization(
     asset = env.scene[asset_cfg.name]
     joint_pos_rel = asset.data.joint_pos[:, asset_cfg.joint_ids] - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
     err = torch.sum(torch.square(joint_pos_rel), dim=1)
-    regularization_reward = err
+    regularization_reward = -err
     # send_data_stream(
     #     {
     #         "err": err[0],
@@ -381,7 +381,7 @@ def joint_reqularization_potential(env: ManagerBasedRLEnv, sigma: float = 0.5,
     # - Pitch: penalize deviation from default for each leg independently
     # - Roll: penalize left-right asymmetry
     # - Yaw: penalize deviation from default
-    if enable_exp_func:
+    if enable_exp_func and enable_potential:  # ポテンシャルが有効じゃないとexpは使えない。
         current_potential = torch.exp(-(torch.square(joint_pos_left_p * pitch_slack)) / sigma).sum(dim=1) + \
                                 torch.exp(-(torch.square(joint_pos_right_p * pitch_slack)) / sigma).sum(dim=1) + \
                                 torch.exp(-(torch.square(joint_pos_r * roll_slack)) / sigma).sum(dim=1) + \

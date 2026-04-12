@@ -23,7 +23,8 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
-from isaaclab.actuators import  IdealPDActuatorCfg
+from isaaclab.actuators import IdealPDActuatorCfg
+from isaaclab.sim.converters import UrdfConverterCfg
 
 # ローカルのmdpモジュールをインポート（カスタム関数 + 標準mdp関数を含む）
 from . import mdp
@@ -34,11 +35,12 @@ import math
 
 from pathlib import Path
 
-PROJECT_HOME_DIR = Path.home() / "k1_walking" / "K1_serial"
+PROJECT_HOME_DIR = Path.home() / "k1_walking" / "booster_assets" / "robots" / "K1"
 
 BOOSTER_K1_CFG = ArticulationCfg(
-    spawn=sim_utils.UsdFileCfg(
-        usd_path=f"{PROJECT_HOME_DIR}/K1_serial.usd",
+    spawn=sim_utils.UrdfFileCfg(
+        asset_path=f"{PROJECT_HOME_DIR}/K1_22dof.urdf",
+        fix_base=False,
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
@@ -50,9 +52,15 @@ BOOSTER_K1_CFG = ArticulationCfg(
             max_depenetration_velocity=1.0,
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=False,  # これオフでもいいらしいすね 
-            solver_position_iteration_count=8, 
+            enabled_self_collisions=False,  # これオフでもいいらしいすね
+            solver_position_iteration_count=8,
             solver_velocity_iteration_count=1
+        ),
+        joint_drive=UrdfConverterCfg.JointDriveCfg(
+            gains=UrdfConverterCfg.JointDriveCfg.PDGainsCfg(
+                stiffness={".*": 0.0},  # actuator設定で上書きされるため0
+                damping={".*": 0.0},
+            ),
         ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
@@ -128,8 +136,8 @@ BOOSTER_K1_CFG = ArticulationCfg(
             ],
             effort_limit=100,
             velocity_limit=50.0,
-            stiffness=40.0,
-            damping=10.0,
+            stiffness=400.0,  # 腕を固定するために高いstiffnessを設定
+            damping=40.0,     # 振動を抑えるためにdampingも上げる
         ),
         # "bodies": IdealPDActuatorCfg(
         #     joint_names_expr=["AAHead_Yaw", "Head_Pitch"],
@@ -141,9 +149,11 @@ BOOSTER_K1_CFG = ArticulationCfg(
     },
 )
 
+# holosomaのt1_29dofと同じterrain設定
+# flat: 0.2, rough: 0.6, low_obstacles: 0.2
 ROUGH_TERRAINS_CFG_ORIG = TerrainGeneratorCfg(
     size=(8.0, 8.0),
-    border_width=20.0,
+    border_width=40.0,  # holosomaと同じ
     num_rows=10,
     num_cols=20,
     horizontal_scale=0.1,
@@ -151,38 +161,24 @@ ROUGH_TERRAINS_CFG_ORIG = TerrainGeneratorCfg(
     slope_threshold=0.75,
     use_cache=False,
     sub_terrains={
-        # ピラミッド階段は不要なので消す
-        # "pyramid_stairs": terrain_gen.MeshPyramidStairsTerrainCfg(
-        #     proportion=0.2,
-        #     step_height_range=(0.05, 0.23),
-        #     step_width=0.3,
-        #     platform_width=3.0,
-        #     border_width=1.0,
-        #     holes=False,
-        # ),
-        # 逆ピラミッド階段も不要なので消す
-        # "pyramid_stairs_inv": terrain_gen.MeshInvertedPyramidStairsTerrainCfg(  
-        #     proportion=0.2,
-        #     step_height_range=(0.05, 0.23),
-        #     step_width=0.3,
-        #     platform_width=3.0,
-        #     border_width=1.0,
-        #     holes=False,
-        # ),
-        "boxes": terrain_gen.MeshRandomGridTerrainCfg(
-            proportion=0.5, grid_width=0.45, grid_height_range=(0.05, 0.2), platform_width=2.0
+        # flat: 20% - 平面地形
+        "flat": terrain_gen.MeshPlaneTerrainCfg(
+            proportion=0.2,
         ),
+        # rough: 60% - ランダムな凹凸地形
         "random_rough": terrain_gen.HfRandomUniformTerrainCfg(
-            proportion=0.5, noise_range=(0.02, 0.10), noise_step=0.02, border_width=0.25
+            proportion=0.6,
+            noise_range=(0.01, 0.05),  # amplitude_range=[0.01, 0.05]に対応
+            noise_step=0.01,
+            border_width=0.25
         ),
-
-        # ピラミッドスロープも不要
-        # "hf_pyramid_slope": terrain_gen.HfPyramidSlopedTerrainCfg(
-        #     proportion=0.1, slope_range=(0.0, 0.4), platform_width=2.0, border_width=0.25
-        # ),
-        # "hf_pyramid_slope_inv": terrain_gen.HfInvertedPyramidSlopedTerrainCfg(
-        #     proportion=0.1, slope_range=(0.0, 0.4), platform_width=2.0, border_width=0.25
-        # ),
+        # low_obstacles: 20% - 低い障害物
+        "boxes": terrain_gen.MeshRandomGridTerrainCfg(
+            proportion=0.2,
+            grid_width=0.35,  # step_width_range=[0.30, 0.40]の中央値
+            grid_height_range=(0.02, 0.08),  # 低めの障害物
+            platform_width=2.0
+        ),
     },
 )
 
@@ -267,8 +263,7 @@ class ActionsCfg:
         ".*_Hip_.*",
         ".*_Knee_.*",
         ".*_Ankle_.*",
-        ".*_Shoulder_Pitch",
-        # ".*_Shoulder_.*",
+        ".*_Shoulder_.*",
         # ".*_Elbow_.*",
     ], scale=1.0, use_default_offset=True)
 
@@ -383,32 +378,54 @@ class K1Rewards:
         weight=-10.0,
     )
 
+    # upright_vecは20度で0.35位が出る。二乗は、0.1225。rとpが両方20度ならば0.245位
+    # 10度は0.175、二乗は0.030625。両方10度ならば0.06125
+    # 両方20度で-10.0のペナルティにしたいなら、40.82倍すれば良い。
+    # これはポテンシャルもexpも使わない場合
     orientation_potential = RewTerm(
         func=mdp.orientation_potential,
         weight=20.0,
         params={
-            "sigma": 0.05, 
+            "sigma": 0.15, 
             "discount_factor": 0.985,
-            "enable_potential": True,
-            "enable_exp_func": False,  # expはオフにした
+            "enable_potential": False,
+            "enable_exp_func": False,
             }
+    )
+
+    height_potential = RewTerm(
+        func=mdp.robot_height_potential,
+        weight=2.5e1,
+        params={
+            "target_height": 0.50,
+            "sigma": 0.10,
+            "discount_factor": 0.9,
+        }
     )
 
     joint_regularization_potential = RewTerm(
         func=mdp.joint_reqularization_potential, 
-        weight=7.0e-3,
+        weight=4.0e-3,
         params={
             "sigma": 0.15,
             "pitch_slack": [0.01, 0.01, 5.0], # hip_pitch, knee_pitch, ankle_pitch
             "roll_slack": [1.0, 5.0],  # hip_roll, ankle_roll
             "yaw_slack": 0.9,
-            "enable_exp_func": True,
+            "enable_exp_func": False,
             "enable_potential": False,
             }
     )
 
+    upper_body_joint_regularization = RewTerm(
+        func=mdp.upper_body_joint_regularization,
+        weight=8e-1,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Shoulder_.*", ".*_Elbow_.*"]),
+        }
+    )
+
     feet_parallel_to_ground = RewTerm(
-        func=mdp.feet_parallel_to_ground, weight=2.5,
+        func=mdp.feet_parallel_to_ground, weight= 0.0, # 2.5,
         params={
             "sigma": 0.1,
             "discount_factor": 0.985,
@@ -416,14 +433,14 @@ class K1Rewards:
                 }
     )
 
-    # feet_slide = RewTerm(
-    #     func=mdp.feet_slide,   # あまり高いとジャンプが最適解になる
-    #     weight=-0.08,  # 元-0.1
-    #     params={
-    #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
-    #         "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot_link"),
-    #     },
-    # )
+    feet_slide = RewTerm(
+        func=mdp.feet_slide,   # あまり高いとジャンプが最適解になる
+        weight=-0.08,  # 元-0.1
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot_link"),
+        },
+    )
 
     feet_air_time = RewTerm(
         func=mdp.feet_air_time, weight=5.0,
@@ -437,7 +454,7 @@ class K1Rewards:
     # ------------- シェイピング報酬（ペナルティ系）
     action_rate_l2_legs = RewTerm(
         func=mdp.action_rate_l2_subset,
-        weight=-0.8,
+        weight=-0.1,  # -0.8,
         params={
             "joint_name_patterns": [".*_Hip_.*", ".*_Knee_.*", ".*_Ankle_.*"],
             "action_term_name": "joint_pos",
@@ -446,7 +463,7 @@ class K1Rewards:
 
     action_rate_l2_arms = RewTerm(
         func=mdp.action_rate_l2_subset,
-        weight=-0.3,
+        weight=-0.1,   # -0.3,
         params={
             "joint_name_patterns": [".*_Shoulder_.*", ".*_Elbow_.*"],
             "action_term_name": "joint_pos",
@@ -458,9 +475,10 @@ class K1Rewards:
     #     weight=-0.005,
     # )
 
+    # 0
     ang_vel_xy_l2 = RewTerm(  # まだ追加した事は無いが、将来的に追加するかも
         func=mdp.ang_vel_xy_l2,
-        weight=-0.4
+        weight=-0.1
     )
 
     # body_lin_acc = RewTerm(
@@ -470,12 +488,12 @@ class K1Rewards:
 
     lin_vel_z_pen = RewTerm(
         func=mdp.lin_vel_z_l2,
-        weight=-1.5,
+        weight=-6.0,
     )
 
     feet_close_penalty = RewTerm(
         func=mdp.feet_close_penalty,
-        weight=-5.0,
+        weight=-1.0,
         params={
             "feet_distance_threshold": 0.09,
         }
@@ -498,14 +516,6 @@ class K1Rewards:
     #     params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Ankle_.*", ".*_Hip_.*", ".*_Knee_.*"])},
     # )
 
-    upper_body_joint_regularization = RewTerm(
-        func=mdp.upper_body_joint_regularization,
-        weight=-1e-1,
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Shoulder_.*", ".*_Elbow_.*"]),
-        }
-    )
-
 
 @configclass
 class CurriculumCfg:
@@ -516,7 +526,8 @@ class CurriculumCfg:
         func=mdp.modify_reward_weight_by_episode_length_linearly,
         params = {
             "term_name" : "orientation_potential",
-            "target_weight" : 30.0
+            "target_weight" : 45.0,
+            "init_levelup_threshold" : 0.0,
         }
     )
 
@@ -524,8 +535,17 @@ class CurriculumCfg:
         func=mdp.modify_reward_weight_by_episode_length_linearly,
         params = {
             "term_name" : "joint_regularization_potential",
-            "target_weight" : 1.0e-2,
-            "init_levelup_threshold" : 200,
+            "target_weight" : 7.5e-2,
+            "init_levelup_threshold" : 0.0,
+        }
+    )
+
+    upper_body_joint_regularization_cur = CurrTerm(
+        func=mdp.modify_reward_weight_by_episode_length_linearly,
+        params = {
+            "term_name" : "upper_body_joint_regularization",
+            "target_weight" : 1.5,
+            "init_levelup_threshold" : 0.0,
         }
     )
 
@@ -544,12 +564,12 @@ class CurriculumCfg:
             "target_weight" : -1.7 ,
         })
 
-    action_rate_arms_cur = CurrTerm(
-        func=mdp.modify_reward_weight_by_episode_length_linearly,
-        params = {
-            "term_name" : "action_rate_l2_arms",
-            "target_weight" : -0.7,
-        })
+    # action_rate_arms_cur = CurrTerm(
+    #     func=mdp.modify_reward_weight_by_episode_length_linearly,
+    #     params = {
+    #         "term_name" : "action_rate_l2_arms",
+    #         "target_weight" : -0.7,
+    #     })
     
     # base_jerk_cur = CurrTerm(
     #     func=mdp.modify_reward_weight_by_episode_length_linearly,
@@ -607,13 +627,6 @@ class CurriculumCfg:
     #     }
     # )
 
-    upper_body_joint_regularization_cur = CurrTerm(
-        func=mdp.modify_reward_weight_by_episode_length_linearly,
-        params = {
-            "term_name" : "upper_body_joint_regularization",
-            "target_weight" : 5e-1,
-        }
-    )
 
 @configclass
 class EventCfg:
@@ -698,10 +711,10 @@ class TerminationsCfg:
     )
 
     # Do not modify this parameter!!!! 
-    # root_height_low = DoneTerm(
-    #     func=mdp.root_height_below_minimum,
-    #     params={"asset_cfg": SceneEntityCfg("robot", body_names="Trunk"), "minimum_height": 0.2},
-    # )
+    root_height_low = DoneTerm(
+        func=mdp.root_height_below_minimum,
+        params={"asset_cfg": SceneEntityCfg("robot", body_names="Trunk"), "minimum_height": 0.3},
+    )
 
     bad_orientation = DoneTerm(
         func=mdp.bad_orientation,
