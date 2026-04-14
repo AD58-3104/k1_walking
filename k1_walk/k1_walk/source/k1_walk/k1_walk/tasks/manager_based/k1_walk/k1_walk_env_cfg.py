@@ -425,7 +425,7 @@ class K1Rewards:
     )
 
     feet_parallel_to_ground = RewTerm(
-        func=mdp.feet_parallel_to_ground, weight= 4.243812170161537, # 2.5,
+        func=mdp.feet_parallel_to_ground, weight= 3.1467314166384606, # 2.5,
         params={
             "sigma": 0.1,
             "discount_factor": 0.985,
@@ -435,7 +435,7 @@ class K1Rewards:
 
     feet_slide = RewTerm(
         func=mdp.feet_slide,   # あまり高いとジャンプが最適解になる
-        weight=-0.18738903512731692,  # 元-0.1
+        weight=-0.06705854763271007,  # 元-0.1
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot_link"),
@@ -454,7 +454,7 @@ class K1Rewards:
     # ------------- シェイピング報酬（ペナルティ系）
     action_rate_l2_legs = RewTerm(
         func=mdp.action_rate_l2_subset,
-        weight=-0.331858637023904,  # -0.8,
+        weight=-0.390644129919995,  # -0.8,
         params={
             "joint_name_patterns": [".*_Hip_.*", ".*_Knee_.*", ".*_Ankle_.*"],
             "action_term_name": "joint_pos",
@@ -463,7 +463,7 @@ class K1Rewards:
 
     action_rate_l2_arms = RewTerm(
         func=mdp.action_rate_l2_subset,
-        weight=-0.1998540531962646,   # -0.3,
+        weight=-0.25077994596142206,   # -0.3,
         params={
             "joint_name_patterns": [".*_Shoulder_.*", ".*_Elbow_.*"],
             "action_term_name": "joint_pos",
