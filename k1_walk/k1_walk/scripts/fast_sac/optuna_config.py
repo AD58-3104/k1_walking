@@ -27,7 +27,7 @@ class OptunaConfig:
     secondary_metrics: List[str] = field(default_factory=lambda: [
         "Episode/reward",
         "Rewards/track_lin_vel_xy_exp",
-        "Rewards/alive_bonus",
+        # "Rewards/alive_bonus",
     ])
 
     # タイムアウト設定（分）
@@ -49,20 +49,20 @@ class RewardSearchSpace:
     # alive_bonus: Tuple[float, float, bool] = (3.0, 30.0, False)
 
     # シェイピング報酬（ポテンシャル系）
-    orientation_potential: Tuple[float, float, bool] = (5.0, 60.0, False)
-    height_potential: Tuple[float, float, bool] = (5.0, 50.0, False)
+    # orientation_potential: Tuple[float, float, bool] = (5.0, 60.0, False)
+    # height_potential: Tuple[float, float, bool] = (5.0, 50.0, False)
 
     # その他の報酬
     feet_slide: Tuple[float, float, bool] = (-0.3, -0.01, False)
-    feet_air_time: Tuple[float, float, bool] = (1.0, 15.0, False)
+    # feet_air_time: Tuple[float, float, bool] = (1.0, 15.0, False)
 
     # ペナルティ系
-    joint_regularization_potential: Tuple[float, float, bool] = (0.001, 0.05, True)
-    upper_body_joint_regularization: Tuple[float, float, bool] = (0.2, 2.0, False)
+    # joint_regularization_potential: Tuple[float, float, bool] = (0.001, 0.05, True)
+    # upper_body_joint_regularization: Tuple[float, float, bool] = (0.2, 2.0, False)
     feet_parallel_to_ground: Tuple[float, float, bool] = (0.5, 5.0, False)
     action_rate_l2_legs: Tuple[float, float, bool] = (-2.0, -0.2, False)
     action_rate_l2_arms: Tuple[float, float, bool] = (-1.2, -0.1, False)
-    ang_vel_xy_l2: Tuple[float, float, bool] = (-1.0, -0.1, False)
+    # ang_vel_xy_l2: Tuple[float, float, bool] = (-1.0, -0.1, False)
 
     def get_search_ranges(self) -> Dict[str, Tuple[float, float, bool]]:
         """探索範囲の辞書を返す"""
