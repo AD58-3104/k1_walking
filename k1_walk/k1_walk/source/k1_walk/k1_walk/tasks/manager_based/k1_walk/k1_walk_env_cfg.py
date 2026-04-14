@@ -384,7 +384,7 @@ class K1Rewards:
     # これはポテンシャルもexpも使わない場合
     orientation_potential = RewTerm(
         func=mdp.orientation_potential,
-        weight=20.0,
+        weight=25.053406395507178,
         params={
             "sigma": 0.15, 
             "discount_factor": 0.985,
@@ -395,7 +395,7 @@ class K1Rewards:
 
     height_potential = RewTerm(
         func=mdp.robot_height_potential,
-        weight=2.5e1,
+        weight=12.326307219255284,
         params={
             "target_height": 0.50,
             "sigma": 0.10,
@@ -405,7 +405,7 @@ class K1Rewards:
 
     joint_regularization_potential = RewTerm(
         func=mdp.joint_reqularization_potential, 
-        weight=4.0e-3,
+        weight=0.003257740286561356,
         params={
             "sigma": 0.15,
             "pitch_slack": [0.01, 0.01, 5.0], # hip_pitch, knee_pitch, ankle_pitch
@@ -418,14 +418,14 @@ class K1Rewards:
 
     upper_body_joint_regularization = RewTerm(
         func=mdp.upper_body_joint_regularization,
-        weight=8e-1,
+        weight=0.8909868975828729,
         params={
             "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Shoulder_.*", ".*_Elbow_.*"]),
         }
     )
 
     feet_parallel_to_ground = RewTerm(
-        func=mdp.feet_parallel_to_ground, weight= 0.0, # 2.5,
+        func=mdp.feet_parallel_to_ground, weight= 4.243812170161537, # 2.5,
         params={
             "sigma": 0.1,
             "discount_factor": 0.985,
@@ -435,7 +435,7 @@ class K1Rewards:
 
     feet_slide = RewTerm(
         func=mdp.feet_slide,   # あまり高いとジャンプが最適解になる
-        weight=-0.08,  # 元-0.1
+        weight=-0.18738903512731692,  # 元-0.1
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot_link"),
@@ -443,7 +443,7 @@ class K1Rewards:
     )
 
     feet_air_time = RewTerm(
-        func=mdp.feet_air_time, weight=5.0,
+        func=mdp.feet_air_time, weight=6.590553936477491,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot_link"),
             "command_name": "base_velocity",
@@ -454,7 +454,7 @@ class K1Rewards:
     # ------------- シェイピング報酬（ペナルティ系）
     action_rate_l2_legs = RewTerm(
         func=mdp.action_rate_l2_subset,
-        weight=-0.1,  # -0.8,
+        weight=-0.331858637023904,  # -0.8,
         params={
             "joint_name_patterns": [".*_Hip_.*", ".*_Knee_.*", ".*_Ankle_.*"],
             "action_term_name": "joint_pos",
@@ -463,7 +463,7 @@ class K1Rewards:
 
     action_rate_l2_arms = RewTerm(
         func=mdp.action_rate_l2_subset,
-        weight=-0.1,   # -0.3,
+        weight=-0.1998540531962646,   # -0.3,
         params={
             "joint_name_patterns": [".*_Shoulder_.*", ".*_Elbow_.*"],
             "action_term_name": "joint_pos",
@@ -478,7 +478,7 @@ class K1Rewards:
     # 0
     ang_vel_xy_l2 = RewTerm(  # まだ追加した事は無いが、将来的に追加するかも
         func=mdp.ang_vel_xy_l2,
-        weight=-0.1
+        weight=-0.16195791915339675
     )
 
     # body_lin_acc = RewTerm(
