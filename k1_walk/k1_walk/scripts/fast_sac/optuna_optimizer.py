@@ -47,7 +47,8 @@ class OptunaOptimizer:
             max_iterations=config.max_iterations,
             log_root=self.log_root,
             working_dir=self.script_dir,
-            timeout_minutes=config.trial_timeout_minutes
+            timeout_minutes=config.trial_timeout_minutes,
+            extra_args=config.extra_args
         )
 
     def create_or_load_study(self) -> optuna.Study:
@@ -129,6 +130,8 @@ class OptunaOptimizer:
         print(f"Max iterations per trial: {self.config.max_iterations}")
         print(f"Eval metric: {self.config.eval_metric}")
         print(f"Storage: {self.config.storage_path}")
+        if self.config.extra_args:
+            print(f"Extra args: {self.config.extra_args}")
         print(f"{'='*60}\n")
 
         try:
@@ -197,6 +200,7 @@ class OptunaOptimizer:
                 "eval_metric": self.config.eval_metric,
                 "max_iterations": self.config.max_iterations,
                 "num_envs": self.config.num_envs,
+                "extra_args": self.config.extra_args,
             },
             "n_trials": len(study.trials),
             "timestamp": timestamp,
@@ -266,6 +270,12 @@ def parse_args():
         action="store_true",
         help="前回の最適化を再開"
     )
+    parser.add_argument(
+        "--extra-args",
+        type=str,
+        default="",
+        help="train_rough.shに渡す追加引数（例: '--seed 42 env.scene.terrain.terrain_type=plane'）"
+    )
     return parser.parse_args()
 
 
@@ -279,6 +289,7 @@ def main():
         max_iterations=args.max_iterations,
         num_envs=args.num_envs,
         trial_timeout_minutes=args.timeout,
+        extra_args=args.extra_args,
     )
 
     # 最適化を実行

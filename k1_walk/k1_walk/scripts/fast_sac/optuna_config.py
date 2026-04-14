@@ -19,6 +19,7 @@ class OptunaConfig:
     task: str = "K1-Walk-Train-rough"
     num_envs: int = 4096
     max_iterations: int = 3000
+    extra_args: str = "--device cuda:1"  # train_rough.shに渡す追加引数（例: "--seed 42 env.scene.terrain.terrain_type=plane"）
 
     # 評価設定
     eval_metric: str = "Episode/length"  # 平均エピソード長を最大化
@@ -42,25 +43,26 @@ class RewardSearchSpace:
     """
 
     # タスク報酬
-    track_lin_vel_xy_exp: Tuple[float, float, bool] = (0.5, 5.0, False)
-    track_ang_vel_z_exp: Tuple[float, float, bool] = (0.3, 3.0, False)
-    feet_height_bezier: Tuple[float, float, bool] = (1.0, 15.0, False)
-    alive_bonus: Tuple[float, float, bool] = (3.0, 30.0, False)
+    # track_lin_vel_xy_exp: Tuple[float, float, bool] = (0.5, 5.0, False)
+    # track_ang_vel_z_exp: Tuple[float, float, bool] = (0.3, 3.0, False)
+    # feet_height_bezier: Tuple[float, float, bool] = (1.0, 15.0, False)
+    # alive_bonus: Tuple[float, float, bool] = (3.0, 30.0, False)
 
     # シェイピング報酬（ポテンシャル系）
     orientation_potential: Tuple[float, float, bool] = (5.0, 60.0, False)
     height_potential: Tuple[float, float, bool] = (5.0, 50.0, False)
-    joint_regularization_potential: Tuple[float, float, bool] = (0.001, 0.05, True)
-    upper_body_joint_regularization: Tuple[float, float, bool] = (0.2, 2.0, False)
 
     # その他の報酬
     feet_slide: Tuple[float, float, bool] = (-0.3, -0.01, False)
     feet_air_time: Tuple[float, float, bool] = (1.0, 15.0, False)
 
     # ペナルティ系
-    action_rate_l2_legs: Tuple[float, float, bool] = (-0.5, -0.01, False)
-    lin_vel_z_pen: Tuple[float, float, bool] = (-20.0, -1.0, False)
-    feet_close_penalty: Tuple[float, float, bool] = (-5.0, -0.1, False)
+    joint_regularization_potential: Tuple[float, float, bool] = (0.001, 0.05, True)
+    upper_body_joint_regularization: Tuple[float, float, bool] = (0.2, 2.0, False)
+    feet_parallel_to_ground: Tuple[float, float, bool] = (0.5, 5.0, False)
+    action_rate_l2_legs: Tuple[float, float, bool] = (-2.0, -0.2, False)
+    action_rate_l2_arms: Tuple[float, float, bool] = (-1.2, -0.1, False)
+    ang_vel_xy_l2: Tuple[float, float, bool] = (-1.0, -0.1, False)
 
     def get_search_ranges(self) -> Dict[str, Tuple[float, float, bool]]:
         """探索範囲の辞書を返す"""

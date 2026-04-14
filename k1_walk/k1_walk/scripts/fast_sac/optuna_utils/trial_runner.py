@@ -17,7 +17,8 @@ class TrialRunner:
         max_iterations: int,
         log_root: Path,
         working_dir: Path,
-        timeout_minutes: int = 45
+        timeout_minutes: int = 45,
+        extra_args: str = ""
     ):
         """
         Args:
@@ -28,6 +29,7 @@ class TrialRunner:
             log_root: ログのルートディレクトリ
             working_dir: 作業ディレクトリ
             timeout_minutes: タイムアウト（分）
+            extra_args: 追加の引数
         """
         self.base_command = base_command
         self.task = task
@@ -36,6 +38,7 @@ class TrialRunner:
         self.log_root = log_root
         self.working_dir = working_dir
         self.timeout_seconds = timeout_minutes * 60
+        self.extra_args = extra_args
 
     def run(
         self,
@@ -61,8 +64,9 @@ class TrialRunner:
             f"--max_iterations {self.max_iterations} "
             f"--headless "
             f"--experiment_name {experiment_name} "
+            f"{self.extra_args} "
             f"{hydra_args}"
-        )
+        ).strip()
 
         print(f"\n{'='*60}")
         print(f"Trial {trial_number}: Starting")

@@ -31,6 +31,7 @@ bash run_optuna.sh --study-name my_study --n-trials 50
 | `--num-envs` | `4096` | 環境数 |
 | `--timeout` | `45` | トライアルのタイムアウト（分） |
 | `--resume` | - | 前回の最適化を再開 |
+| `--extra-args` | `""` | train_rough.shに渡す追加引数 |
 
 ## 使用例
 
@@ -46,6 +47,11 @@ bash run_optuna.sh --resume --study-name my_study
 
 # 環境数を減らす（GPUメモリが少ない場合）
 bash run_optuna.sh --num-envs 2048 --n-trials 50
+
+# 追加引数を渡す（シード固定、地形変更など）
+bash run_optuna.sh --extra-args "--seed 42"
+bash run_optuna.sh --extra-args "env.scene.terrain.terrain_type=plane"
+bash run_optuna.sh --extra-args "--seed 42 env.scene.terrain.terrain_type=plane"
 ```
 
 ## 最適化対象パラメータ
