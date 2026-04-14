@@ -19,19 +19,19 @@ class OptunaConfig:
     task: str = "K1-Walk-Train-rough"
     num_envs: int = 4096
     max_iterations: int = 3000
-    extra_args: str = "--device cuda:1"  # train_rough.shに渡す追加引数（例: "--seed 42 env.scene.terrain.terrain_type=plane"）
+    extra_args: str = ""  # train_rough.shに渡す追加引数（例: "--seed 42 env.scene.terrain.terrain_type=plane"）
 
     # 評価設定
     eval_metric: str = "Episode/length"  # 平均エピソード長を最大化
     eval_step: Optional[int] = None  # Noneなら最終ステップ
     secondary_metrics: List[str] = field(default_factory=lambda: [
-        "Episode/reward",
+        # "Episode/reward",
         "Rewards/track_lin_vel_xy_exp",
         # "Rewards/alive_bonus",
     ])
 
     # タイムアウト設定（分）
-    trial_timeout_minutes: int = 45
+    trial_timeout_minutes: int = 20
 
 
 @dataclass
@@ -43,9 +43,9 @@ class RewardSearchSpace:
     """
 
     # タスク報酬
-    # track_lin_vel_xy_exp: Tuple[float, float, bool] = (0.5, 5.0, False)
-    # track_ang_vel_z_exp: Tuple[float, float, bool] = (0.3, 3.0, False)
-    # feet_height_bezier: Tuple[float, float, bool] = (1.0, 15.0, False)
+    track_lin_vel_xy_exp: Tuple[float, float, bool] = (2.0, 6.0, False)
+    track_ang_vel_z_exp: Tuple[float, float, bool] = (1.5, 4.5, False)
+    feet_height_bezier: Tuple[float, float, bool] = (5.0, 15.0, False)
     # alive_bonus: Tuple[float, float, bool] = (3.0, 30.0, False)
 
     # シェイピング報酬（ポテンシャル系）
@@ -53,13 +53,13 @@ class RewardSearchSpace:
     # height_potential: Tuple[float, float, bool] = (5.0, 50.0, False)
 
     # その他の報酬
-    feet_slide: Tuple[float, float, bool] = (-0.3, -0.01, False)
+    # feet_slide: Tuple[float, float, bool] = (-0.3, -0.01, False)
     # feet_air_time: Tuple[float, float, bool] = (1.0, 15.0, False)
 
     # ペナルティ系
     # joint_regularization_potential: Tuple[float, float, bool] = (0.001, 0.05, True)
     # upper_body_joint_regularization: Tuple[float, float, bool] = (0.2, 2.0, False)
-    feet_parallel_to_ground: Tuple[float, float, bool] = (0.5, 5.0, False)
+    # feet_parallel_to_ground: Tuple[float, float, bool] = (0.5, 5.0, False)
     action_rate_l2_legs: Tuple[float, float, bool] = (-2.0, -0.2, False)
     action_rate_l2_arms: Tuple[float, float, bool] = (-1.2, -0.1, False)
     # ang_vel_xy_l2: Tuple[float, float, bool] = (-1.0, -0.1, False)
