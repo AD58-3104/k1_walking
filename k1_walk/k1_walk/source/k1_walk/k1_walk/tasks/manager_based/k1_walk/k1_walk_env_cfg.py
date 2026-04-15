@@ -373,10 +373,10 @@ class K1Rewards:
 
     # ------------- シェイピング報酬（ポテンシャル系）
 
-    terminate_penalty = RewTerm(
-        func=mdp.is_terminated,
-        weight=-10.0,
-    )
+    # terminate_penalty = RewTerm(
+    #     func=mdp.is_terminated,
+    #     weight=-10.0,
+    # )
 
     # upright_vecは20度で0.35位が出る。二乗は、0.1225。rとpが両方20度ならば0.245位
     # 10度は0.175、二乗は0.030625。両方10度ならば0.06125
@@ -405,7 +405,7 @@ class K1Rewards:
 
     joint_regularization_potential = RewTerm(
         func=mdp.joint_reqularization_potential, 
-        weight=0.003257740286561356,
+        weight=0.0065,
         params={
             "sigma": 0.15,
             "pitch_slack": [0.01, 0.01, 5.0], # hip_pitch, knee_pitch, ankle_pitch
@@ -454,7 +454,7 @@ class K1Rewards:
     # ------------- シェイピング報酬（ペナルティ系）
     action_rate_l2_legs = RewTerm(
         func=mdp.action_rate_l2_subset,
-        weight=-0.5304555405977915,  # -0.8,
+        weight=-1.0304555405977915,  # -0.8,
         params={
             "joint_name_patterns": [".*_Hip_.*", ".*_Knee_.*", ".*_Ankle_.*"],
             "action_term_name": "joint_pos",
@@ -463,7 +463,7 @@ class K1Rewards:
 
     action_rate_l2_arms = RewTerm(
         func=mdp.action_rate_l2_subset,
-        weight=-0.3390488722673567,   # -0.3,
+        weight=-1.190488722673567,   # -0.3,
         params={
             "joint_name_patterns": [".*_Shoulder_.*", ".*_Elbow_.*"],
             "action_term_name": "joint_pos",
@@ -510,11 +510,11 @@ class K1Rewards:
     #     params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Ankle_.*", ".*_Hip_.*", ".*_Knee_.*"])}
     # )
 
-    # joint_acc = RewTerm(
-    #     func=mdp.joint_acc_l2,
-    #     weight=-1e-9 * 0,
-    #     params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Ankle_.*", ".*_Hip_.*", ".*_Knee_.*"])},
-    # )
+    joint_acc = RewTerm(
+        func=mdp.joint_acc_l2,
+        weight=-1e-8,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Ankle_.*", ".*_Hip_.*", ".*_Knee_.*"])},
+    )
 
 
 @configclass
