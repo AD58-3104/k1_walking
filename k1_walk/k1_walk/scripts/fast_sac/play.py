@@ -239,7 +239,7 @@ class ViserVisualizer:
         self.server.scene.add_frame("/world", axes_length=0.3, axes_radius=0.01)
 
         # Store joint names from URDF
-        self.joint_names = list(self.urdf.joint_names)
+        self.joint_names = list(self.urdf._joint_frames)
         print(f"[INFO] Loaded URDF joints: {self.joint_names}")
 
     def update(
