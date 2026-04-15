@@ -220,7 +220,7 @@ class ViserVisualizer:
         # Load URDF
         self.urdf = viser.extras.ViserUrdf(
             self.server,
-            urdf_path=str(self.urdf_path),
+            urdf_or_path=self.urdf_path,
             root_node_name="/robot",
         )
 
