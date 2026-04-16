@@ -67,7 +67,7 @@ class OptunaOptimizer:
             study_name=self.config.study_name,
             storage=storage,
             sampler=sampler,
-            direction="maximize",
+            direction=self.config.eval_metric_direction,
             load_if_exists=True
         )
 
@@ -94,7 +94,7 @@ class OptunaOptimizer:
             print(f"Trial {trial.number}: No event file found in {log_dir}")
             return float("-inf")
 
-        all_metrics = [self.config.eval_metric] + self.config.secondary_metrics
+        all_metrics = [self.config.eval_metric] + list(self.config.secondary_metrics.keys())
         metrics = extract_metrics_from_tensorboard(
             event_file,
             all_metrics,
