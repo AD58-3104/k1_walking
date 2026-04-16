@@ -250,6 +250,23 @@ def robot_height_potential(env: ManagerBasedRLEnv, target_height: float = 0.8, s
     env._custom_buffers[buffer_key] = current_potential.clone()
     return shaped_reward
 
+def minimum_height(env: ManagerBasedRLEnv, min_height: float = 0.47, 
+                    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+                    sensor_cfg: SceneEntityCfg = None) -> torch.Tensor:
+    """
+    minimum heightよりもロボットの高さが低い場合にペナルティを与える報酬関数
+    """
+    asset = env.scene[asset_cfg.name]
+    if sensor_cfg is not None:  # これはRaycasterである必要あり.roughの場合に使う
+        sensor = env.scene[sensor_cfg.name]
+        # Adjust the target height using the sensor data
+        adjusted_min_height = min_height + torch.mean(sensor.data.ray_hits_w[..., 2], dim=1)
+    else:
+        # Use the provided target height directly for flat terrain
+        adjusted_min_height = min_height
+    # Compute the L2 squared penalty
+    return torch.where(asset.data.root_pos_w[:, 2] < adjusted_min_height, torch.square(asset.data.root_pos_w[:, 2] - adjusted_min_height), torch.zeros_like(asset.data.root_pos_w[:, 2]))
+
 def second_order_action_rate(env: ManagerBasedRLEnv) -> torch.Tensor:
     buffer_key = "prev_prev_action"
     if not hasattr(env, "_custom_buffers"):
@@ -926,3 +943,27 @@ def bad_gait_penalty(
     total_penalty *= (command_speed > 0.1).float()
 
     return total_penalty
+
+
+def action_smoothness(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")) -> torch.Tensor:
+    """Penalize high action changes to encourage smooth actions.
+
+    This function computes the difference between the current action and the previous action,
+    and penalizes large changes to encourage smoother control inputs.
+    """
+    # Get current action
+    current_action = env.last_actions
+
+    # Buffer for previous action
+    buffer_key = "prev_action"
+    if not hasattr(env, "_custom_buffers"):
+        env._custom_buffers = {}
+    if buffer_key not in env._custom_buffers:
+        env._custom_buffers[buffer_key] = current_action.clone()
+    prev_action = env._custom_buffers[buffer_key]
+    env._custom_buffers[buffer_key] = current_action.clone()
+
+    # Compute action change (L2 norm)
+    action_change = torch.norm(current_action - prev_action, dim=1)
+
+    return action_change
