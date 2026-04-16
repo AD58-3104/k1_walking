@@ -336,18 +336,18 @@ class K1Rewards:
     # ------------- タスク報酬
     track_lin_vel_xy_exp = RewTerm(
         func=mdp.track_lin_vel_xy_yaw_frame_exp,
-        weight=2.0,
+        weight=2.5416625145101803,
         params={"command_name": "base_velocity", "std": 0.25},
     )
 
     track_ang_vel_z_exp = RewTerm(
         func=mdp.track_ang_vel_z_world_exp, 
-        weight=1.5, 
+        weight=4.327671175837816, 
         params={"command_name": "base_velocity", "std": 0.25}
     )
 
     feet_height_bezier = RewTerm(
-        func=mdp.feet_height_bezier, weight=5.0,
+        func=mdp.feet_height_bezier, weight=7.081160836877872,
         params={
             "sigma": 0.008,
             "swing_height": 0.11,
@@ -357,7 +357,7 @@ class K1Rewards:
 
     alive_bonus = RewTerm(
         func=mdp.is_alive,
-        weight= 10.0,
+        weight= 27.290911171033287,
     )
 
     # ------------- ビヘイビア報酬
