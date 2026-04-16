@@ -242,11 +242,17 @@ class ViserVisualizer:
         self.joint_names = list(self.urdf._joint_frames)
         print(f"[INFO] Loaded URDF joints: {self.joint_names}")
 
+        # Store arrow handles for velocity visualization
+        self._command_arrow = None
+        self._velocity_arrow = None
+
     def update(
         self,
         joint_positions: dict[str, float],
         root_position: tuple[float, float, float] | None = None,
         root_orientation: tuple[float, float, float, float] | None = None,
+        command_velocity: tuple[float, float, float] | None = None,
+        actual_velocity: tuple[float, float, float] | None = None,
     ):
         """Update robot visualization.
 
@@ -254,6 +260,8 @@ class ViserVisualizer:
             joint_positions: Dictionary mapping joint names to positions (radians).
             root_position: Optional (x, y, z) position of the robot base.
             root_orientation: Optional (w, x, y, z) quaternion for robot base orientation.
+            command_velocity: Optional (vx, vy, vz) commanded velocity in world frame.
+            actual_velocity: Optional (vx, vy, vz) actual velocity in world frame.
         """
         # Update joint positions
         self.urdf.update_cfg(joint_positions)
@@ -277,6 +285,93 @@ class ViserVisualizer:
                 axes_length=0.0,
                 axes_radius=0.0,
             )
+
+        # Draw velocity arrows
+        if root_position is not None:
+            arrow_z = root_position[2] + 0.1  # Draw arrows slightly above robot base
+            arrow_scale = 0.5  # Scale arrow length (1 m/s = 0.5m arrow)
+
+            # Draw command velocity arrow (green)
+            if command_velocity is not None:
+                cmd_vx, cmd_vy, _ = command_velocity
+                cmd_magnitude = np.sqrt(cmd_vx**2 + cmd_vy**2)
+                if cmd_magnitude > 0.01:
+                    end_x = root_position[0] + cmd_vx * arrow_scale
+                    end_y = root_position[1] + cmd_vy * arrow_scale
+                    self._command_arrow = self.server.scene.add_spline_catmull_rom(
+                        "/command_velocity",
+                        positions=np.array([
+                            [root_position[0], root_position[1], arrow_z],
+                            [end_x, end_y, arrow_z],
+                        ]),
+                        color=(0, 255, 0),  # Green for command
+                        line_width=4.0,
+                    )
+                    # Arrow head
+                    self.server.scene.add_icosphere(
+                        "/command_velocity_head",
+                        radius=0.03,
+                        position=(end_x, end_y, arrow_z),
+                        color=(0, 255, 0),
+                    )
+                else:
+                    # Hide arrow when velocity is too small by drawing at robot position
+                    self.server.scene.add_spline_catmull_rom(
+                        "/command_velocity",
+                        positions=np.array([
+                            [root_position[0], root_position[1], arrow_z],
+                            [root_position[0], root_position[1], arrow_z],
+                        ]),
+                        color=(0, 255, 0),
+                        line_width=0.0,
+                    )
+                    self.server.scene.add_icosphere(
+                        "/command_velocity_head",
+                        radius=0.0,
+                        position=(root_position[0], root_position[1], arrow_z),
+                        color=(0, 255, 0),
+                    )
+
+            # Draw actual velocity arrow (red)
+            if actual_velocity is not None:
+                act_vx, act_vy, _ = actual_velocity
+                act_magnitude = np.sqrt(act_vx**2 + act_vy**2)
+                if act_magnitude > 0.01:
+                    end_x = root_position[0] + act_vx * arrow_scale
+                    end_y = root_position[1] + act_vy * arrow_scale
+                    self._velocity_arrow = self.server.scene.add_spline_catmull_rom(
+                        "/actual_velocity",
+                        positions=np.array([
+                            [root_position[0], root_position[1], arrow_z],
+                            [end_x, end_y, arrow_z],
+                        ]),
+                        color=(255, 0, 0),  # Red for actual
+                        line_width=4.0,
+                    )
+                    # Arrow head
+                    self.server.scene.add_icosphere(
+                        "/actual_velocity_head",
+                        radius=0.03,
+                        position=(end_x, end_y, arrow_z),
+                        color=(255, 0, 0),
+                    )
+                else:
+                    # Hide arrow when velocity is too small by drawing at robot position
+                    self.server.scene.add_spline_catmull_rom(
+                        "/actual_velocity",
+                        positions=np.array([
+                            [root_position[0], root_position[1], arrow_z],
+                            [root_position[0], root_position[1], arrow_z],
+                        ]),
+                        color=(255, 0, 0),
+                        line_width=0.0,
+                    )
+                    self.server.scene.add_icosphere(
+                        "/actual_velocity_head",
+                        radius=0.0,
+                        position=(root_position[0], root_position[1], arrow_z),
+                        color=(255, 0, 0),
+                    )
 
     def close(self):
         """Stop the viser server."""
@@ -358,6 +453,24 @@ def main_with_viser():
     print(f"[INFO] Open http://localhost:{args_cli.viser_port} in your browser")
     print("[INFO] Press Ctrl+C to stop")
 
+    # Helper function to convert velocity from robot frame to world frame
+    def robot_to_world_velocity(vel_robot, yaw):
+        """Convert velocity from robot frame to world frame using yaw angle."""
+        cos_yaw = np.cos(yaw)
+        sin_yaw = np.sin(yaw)
+        vx_world = vel_robot[0] * cos_yaw - vel_robot[1] * sin_yaw
+        vy_world = vel_robot[0] * sin_yaw + vel_robot[1] * cos_yaw
+        return (vx_world, vy_world, 0.0)
+
+    def quat_to_yaw(quat):
+        """Extract yaw angle from quaternion (w, x, y, z)."""
+        w, x, y, z = quat
+        siny_cosp = 2.0 * (w * z + x * y)
+        cosy_cosp = 1.0 - 2.0 * (y * y + z * z)
+        return np.arctan2(siny_cosp, cosy_cosp)
+
+    print("[INFO] Arrow legend: GREEN = commanded velocity, RED = actual velocity")
+
     # simulate environment
     try:
         while simulation_app.is_running():
@@ -374,6 +487,19 @@ def main_with_viser():
             root_pos = robot.data.root_pos_w[env_id].cpu().numpy()
             root_quat = robot.data.root_quat_w[env_id].cpu().numpy()  # (w, x, y, z)
 
+            # Get command velocity (in robot frame)
+            command = unwrapped_env.command_manager.get_command("base_velocity")[env_id].cpu().numpy()
+            # command is [vx, vy, ang_vel_z]
+            cmd_vel_robot = (float(command[0]), float(command[1]), 0.0)
+
+            # Get actual velocity (in world frame)
+            root_lin_vel_w = robot.data.root_lin_vel_w[env_id].cpu().numpy()
+            actual_vel_world = (float(root_lin_vel_w[0]), float(root_lin_vel_w[1]), float(root_lin_vel_w[2]))
+
+            # Convert command velocity from robot frame to world frame
+            yaw = quat_to_yaw(root_quat)
+            cmd_vel_world = robot_to_world_velocity(cmd_vel_robot, yaw)
+
             # Build joint position dictionary
             joint_pos_dict = {}
             for i, name in enumerate(joint_names):
@@ -386,6 +512,8 @@ def main_with_viser():
                 joint_positions=joint_pos_dict,
                 root_position=(float(root_pos[0]), float(root_pos[1]), float(root_pos[2])),
                 root_orientation=(float(root_quat[0]), float(root_quat[1]), float(root_quat[2]), float(root_quat[3])),
+                command_velocity=cmd_vel_world,
+                actual_velocity=actual_vel_world,
             )
 
             # time delay for real-time evaluation
