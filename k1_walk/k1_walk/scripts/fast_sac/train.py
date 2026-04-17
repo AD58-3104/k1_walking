@@ -60,8 +60,15 @@ from isaaclab.envs import (
     multi_agent_to_single_agent,
 )
 from isaaclab.utils.dict import print_dict
-import pickle
+#from isaaclab.utils.io import dump_pickle, dump_yaml
+# 修正後
 from isaaclab.utils.io import dump_yaml
+import pickle
+
+def dump_pickle(path, data):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as f:
+        pickle.dump(data, f)
 
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
@@ -69,7 +76,7 @@ from isaaclab_tasks.utils.hydra import hydra_task_config
 
 # Import FastSAC components
 import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../FastSAC_standalone/isaaclab_fast_sac"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../../../FastSAC_standalone/isaaclab_fast_sac/isaaclab_fast_sac"))
 from isaaclab_fast_sac import FastSacRunner, FastSacRunnerCfg, FastSacVecEnvWrapper
 
 # PLACEHOLDER: Extension template (do not remove this comment)
@@ -156,11 +163,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # dump the configuration into log-directory
     dump_yaml(os.path.join(log_dir, "params", "env.yaml"), env_cfg)
     dump_yaml(os.path.join(log_dir, "params", "agent.yaml"), agent_cfg)
-    with open(os.path.join(log_dir, "params", "env.pkl"), "wb") as f:
-        pickle.dump(env_cfg, f)
-
-    with open(os.path.join(log_dir, "params", "agent.pkl"), "wb") as f:
-        pickle.dump(agent_cfg, f)
+    dump_pickle(os.path.join(log_dir, "params", "env.pkl"), env_cfg)
+    dump_pickle(os.path.join(log_dir, "params", "agent.pkl"), agent_cfg)
 
     # run training
     runner.learn(num_learning_iterations=agent_cfg.max_iterations, init_at_random_ep_len=True)

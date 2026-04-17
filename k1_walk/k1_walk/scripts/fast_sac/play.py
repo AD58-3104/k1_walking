@@ -3,6 +3,8 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
+# play.py
+
 """Script to play a checkpoint from FastSAC agent."""
 
 """Launch Isaac Sim Simulator first."""
@@ -59,10 +61,10 @@ from tqdm import tqdm
 from isaaclab.envs import DirectMARLEnv, multi_agent_to_single_agent
 from isaaclab.utils.assets import retrieve_file_path
 from isaaclab.utils.dict import print_dict
-# from isaaclab.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
+#from isaaclab.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
 
 # Import FastSAC components
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../FastSAC_standalone/isaaclab_fast_sac"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../../../FastSAC_standalone/isaaclab_fast_sac/isaaclab_fast_sac"))
 from isaaclab_fast_sac import FastSacRunner, FastSacRunnerCfg, FastSacVecEnvWrapper
 
 import isaaclab_tasks  # noqa: F401
@@ -117,6 +119,7 @@ def main():
             "step_trigger": lambda step: step == 0,
             "video_length": args_cli.video_length,
             "disable_logger": True,
+            "fps": int(1.0 / env.unwrapped.step_dt),  # dtの代わりに直接参照
         }
         print("[INFO] Recording videos during training.")
         print_dict(video_kwargs, nesting=4)
@@ -149,6 +152,7 @@ def main():
     policy = fast_sac_runner.get_inference_policy(device=env.unwrapped.device)
 
     dt = env.unwrapped.step_dt
+    print(f"[INFO] step_dt = {dt}, fps = {1.0 / dt}")  # ← ここに追加
 
     # reset environment
     obs = env.get_observations()

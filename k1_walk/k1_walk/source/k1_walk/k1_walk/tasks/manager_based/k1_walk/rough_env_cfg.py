@@ -29,12 +29,12 @@ from . import mdp
 from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
 
 
-PROJECT_HOME_DIR = Path.home() / "k1_walking" / "K1_locomotion"
+PROJECT_HOME_DIR = "/workspace/k1_rl/k1_rl/source/assets"
 
 
 BOOSTER_K1_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
-        usd_path="/workspace/shared/booster_assets/robots/K1/k1.usd",
+        usd_path=f"{PROJECT_HOME_DIR}/k1.usd",
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
