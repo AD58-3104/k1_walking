@@ -348,7 +348,7 @@ class K1Rewards:
     )
 
     feet_height_bezier = RewTerm(
-        func=mdp.feet_height_bezier, weight=10.081160836877872,
+        func=mdp.feet_height_bezier, weight=10.081160836877872 * 2.0,
         params={
             "sigma": 0.008,
             "swing_height": 0.11,
@@ -358,7 +358,7 @@ class K1Rewards:
 
     alive_bonus = RewTerm(
         func=mdp.is_alive,
-        weight= 10.290911171033287,
+        weight= 20.290911171033287,
     )
 
     # ------------- ビヘイビア報酬
@@ -406,9 +406,9 @@ class K1Rewards:
 
     height_potential = RewTerm(
         func=mdp.minimum_height,
-        weight=-200.0,
+        weight=-10.0,
         params={
-            "min_height": 0.50,
+            "min_height": 0.49,
         }
     )
 
@@ -425,13 +425,13 @@ class K1Rewards:
             }
     )
 
-    upper_body_joint_regularization = RewTerm(
-        func=mdp.upper_body_joint_regularization,
-        weight=0.8909868975828729 * 5.0,
-        params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Shoulder_.*"]),
-        }
-    )
+    # upper_body_joint_regularization = RewTerm(
+    #     func=mdp.upper_body_joint_regularization,
+    #     weight=0.8909868975828729 * 5.0,
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Shoulder_.*"]),
+    #     }
+    # )
 
     feet_parallel_to_ground = RewTerm(
         func=mdp.feet_parallel_to_ground, weight= 4.243812170161537, # 2.5,
@@ -463,7 +463,7 @@ class K1Rewards:
     # ------------- シェイピング報酬（ペナルティ系）
     action_rate_l2_legs = RewTerm(
         func=mdp.action_rate_l2_subset,
-        weight=-1.0304555405977915 * 1.2,
+        weight=-1.0304555405977915 * 0.2,
         params={
             "joint_name_patterns": [".*_Hip_.*", ".*_Knee_.*", ".*_Ankle_.*"],
             "action_term_name": "joint_pos",
@@ -549,14 +549,14 @@ class CurriculumCfg:
         }
     )
 
-    upper_body_joint_regularization_cur = CurrTerm(
-        func=mdp.modify_reward_weight_by_episode_length_linearly,
-        params = {
-            "term_name" : "upper_body_joint_regularization",
-            "target_weight" : 1.5,
-            "init_levelup_threshold" : 0.0,
-        }
-    )
+    # upper_body_joint_regularization_cur = CurrTerm(
+    #     func=mdp.modify_reward_weight_by_episode_length_linearly,
+    #     params = {
+    #         "term_name" : "upper_body_joint_regularization",
+    #         "target_weight" : 1.5,
+    #         "init_levelup_threshold" : 0.0,
+    #     }
+    # )
 
     feet_parallel_to_ground_cur = CurrTerm(
         func=mdp.modify_reward_weight_by_episode_length_linearly,
@@ -660,7 +660,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot"),
-            "mass_distribution_params": (-1.0, 3.0),
+            "mass_distribution_params": (-0.0, 3.0),
             "operation": "add",
         },
     )
@@ -676,21 +676,21 @@ class EventCfg:
         },
     )
 
-    # reset_base = EventTerm(
-    #     func=mdp.reset_root_state_uniform,
-    #     mode="reset",
-    #     params={
-    #         "pose_range": {"x": (0., 0.), "y": (0., 0.), "yaw": (0., 0.)},
-    #         "velocity_range": {
-    #             "x": (-0.5, 0.5),
-    #             "y": (-0.5, 0.5),
-    #             "z": (-0.5, 0.5),
-    #             "roll": (-0.15, 0.15),
-    #             "pitch": (-0.15, 0.15),
-    #             "yaw": (-0.5, 0.5),
-    #         },
-    #     },
-    # )
+    reset_base = EventTerm(
+        func=mdp.reset_root_state_uniform,
+        mode="reset",
+        params={
+            "pose_range": {"x": (0., 0.), "y": (0., 0.), "yaw": (0., 0.)},
+            "velocity_range": {
+                "x": (-0.1, 0.1),
+                "y": (-0.1, 0.1),
+                "z": (-0.1, 0.1),
+                "roll": (-0.01, 0.01),
+                "pitch": (-0.01, 0.01),
+                "yaw": (-0.0, 0.0),
+            },
+        },
+    )
 
     reset_robot_joints = EventTerm(
         func=mdp.reset_joints_by_scale,
@@ -727,10 +727,10 @@ class TerminationsCfg:
         params={"asset_cfg": SceneEntityCfg("robot", body_names="Trunk"), "minimum_height": 0.3},
     )
 
-    bad_orientation = DoneTerm(
-        func=mdp.bad_orientation,
-        params={"limit_angle": math.radians(70)},   # 地面で耐えるのは流石に無し
-    )
+    # bad_orientation = DoneTerm(
+    #     func=mdp.bad_orientation,
+    #     params={"limit_angle": math.radians(70)},   # 地面で耐えるのは流石に無し
+    # )
 
 
 @configclass
