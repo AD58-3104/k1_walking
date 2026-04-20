@@ -7,8 +7,9 @@ import os
 from pathlib import Path
 
 import matplotlib
-matplotlib.use('TkAgg')  # インタラクティブなバックエンドを使用
 import matplotlib.pyplot as plt
+
+_backend = 'interactive'
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 
 
