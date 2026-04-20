@@ -65,7 +65,7 @@ BOOSTER_K1_CFG = ArticulationCfg(
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         # pos=(0.0, 0.0, 0.72 - 0.0841),
-        pos=(0.0, 0.0, 0.60),
+        pos=(0.0, 0.0, 0.58),
         joint_pos={
             "ALeft_Shoulder_Pitch" : 0.2, 
             "ARight_Shoulder_Pitch" : 0.2,   # ここはラジアンで指定するっぽい
@@ -76,18 +76,18 @@ BOOSTER_K1_CFG = ArticulationCfg(
             "Right_Elbow_Pitch" : -0.5, 
             "Right_Elbow_Yaw" : 0.0, 
 
-            "Left_Hip_Pitch" : -0.312, 
+            "Left_Hip_Pitch" : -0.2, 
             "Left_Hip_Roll" : 0.0, 
             "Left_Hip_Yaw" : 0.0, 
-            "Left_Knee_Pitch" : 0.669, 
-            "Left_Ankle_Pitch" : -0.363, 
+            "Left_Knee_Pitch" : 0.4, 
+            "Left_Ankle_Pitch" : -0.25, 
             "Left_Ankle_Roll" : 0.0, 
             
-            "Right_Hip_Pitch" : -0.312, 
+            "Right_Hip_Pitch" : -0.2, 
             "Right_Hip_Roll" : 0.0, 
             "Right_Hip_Yaw" : 0.0, 
-            "Right_Knee_Pitch" : 0.669, 
-            "Right_Ankle_Pitch" : -0.363, 
+            "Right_Knee_Pitch" : 0.4, 
+            "Right_Ankle_Pitch" : -0.25, 
             "Right_Ankle_Roll" : 0.0,
         },
         joint_vel={".*": 0.0},
@@ -98,11 +98,11 @@ BOOSTER_K1_CFG = ArticulationCfg(
             joint_names_expr=[".*_Hip_.*", ".*_Knee_.*", ".*_Ankle_.*"],
             effort_limit_sim={
                 ".*Hip_Pitch.*" : 30.0,
-                ".*Hip_Roll": 20.0,
+                ".*Hip_Roll": 35.0,
                 ".*Hip_Yaw.*": 20.0,
                 ".*_Knee_Pitch": 40.0,
                 ".*_Ankle_Pitch": 20.0,
-                ".*_Ankle_Roll": 15.0,
+                ".*_Ankle_Roll": 20.0,
             },
             velocity_limit_sim={
                 ".*Hip_Pitch.*" : 18.0, #rad/s
@@ -113,18 +113,18 @@ BOOSTER_K1_CFG = ArticulationCfg(
                 ".*_Ankle_Roll": 18.0,
             },
             stiffness={
-                ".*Hip_Yaw.*": 200.0,
-                ".*Hip_Roll": 200.0,
-                ".*Hip_Pitch.*": 200.0,
-                ".*_Knee_Pitch": 200.0,
-                ".*_Ankle_.*": 50.0,
+                ".*Hip_Yaw.*": 40.18,
+                ".*Hip_Roll": 99.10,
+                ".*Hip_Pitch.*": 40.18,
+                ".*_Knee_Pitch": 99.10,
+                ".*_Ankle_.*": 28.50,
             },
             damping={
-                ".*Hip_Yaw.*": 2.0,
-                ".*Hip_Roll": 2.0,
-                ".*Hip_Pitch.*": 2.0,
-                ".*_Knee_Pitch": 2.0,
-                ".*_Ankle_.*": 1.0,
+                ".*Hip_Yaw.*": 2.56,
+                ".*Hip_Roll": 6.31,
+                ".*Hip_Pitch.*": 2.56,
+                ".*_Knee_Pitch": 6.31,
+                ".*_Ankle_.*": 1.81,
             },
         ),
         "arms": IdealPDActuatorCfg(    # K1_locomotionには無いのでコメントアウト
@@ -247,11 +247,11 @@ class CommandsCfg:
         resampling_time_range=(10.0, 10.0),
         rel_standing_envs=0.02,
         rel_heading_envs=1.0,
-        heading_command=False,
+        heading_command=True,
         heading_control_stiffness=0.5,
         debug_vis=True,
         ranges=mdp.UniformVelocityCommandCfg.Ranges(
-            lin_vel_x=(0.0, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-0.5, 0.5), heading=(0.0, 0.0)
+            lin_vel_x=(0.0, 1.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-1.0, 1.0), heading=(-math.pi, math.pi)
         ),
     )
 
@@ -263,9 +263,9 @@ class ActionsCfg:
         ".*_Hip_.*",
         ".*_Knee_.*",
         ".*_Ankle_.*",
-        ".*_Shoulder_.*",
+        # ".*_Shoulder_.*",
         # ".*_Elbow_.*",
-    ], scale=1.0, use_default_offset=True)
+    ], scale=0.5, use_default_offset=True)
 
 @configclass
 class ObservationsCfg:
@@ -306,13 +306,14 @@ class ObservationsCfg:
         """Observations for critic-only privileged state."""
 
         base_lin_vel = ObsTerm(func=mdp.base_lin_vel)
-        foot_height = ObsTerm(
-            func=mdp.foot_height,
-            params={
-                "foot_cfg_right": SceneEntityCfg("robot", body_names="right_foot_link"),
-                "foot_cfg_left": SceneEntityCfg("robot", body_names="left_foot_link"),
-            }
-        )    # 要らなそうなやつを消してみる
+        # body_height = ObsTerm(func=mdp.body_height)
+        # foot_height = ObsTerm(
+        #     func=mdp.foot_height,
+        #     params={
+        #         "foot_cfg_right": SceneEntityCfg("robot", body_names="right_foot_link"),
+        #         "foot_cfg_left": SceneEntityCfg("robot", body_names="left_foot_link"),
+        #     }
+        # )    # 要らなそうなやつを消してみる
 
         def __post_init__(self):
             self.enable_corruption = False
@@ -336,18 +337,18 @@ class K1Rewards:
     # ------------- タスク報酬
     track_lin_vel_xy_exp = RewTerm(
         func=mdp.track_lin_vel_xy_yaw_frame_exp,
-        weight=2.5416625145101803,
+        weight=14.5416625145101803,
         params={"command_name": "base_velocity", "std": 0.25},
     )
 
     track_ang_vel_z_exp = RewTerm(
         func=mdp.track_ang_vel_z_world_exp, 
-        weight=4.327671175837816, 
+        weight=14.327671175837816, 
         params={"command_name": "base_velocity", "std": 0.25}
     )
 
     feet_height_bezier = RewTerm(
-        func=mdp.feet_height_bezier, weight=7.081160836877872,
+        func=mdp.feet_height_bezier, weight=10.081160836877872,
         params={
             "sigma": 0.008,
             "swing_height": 0.11,
@@ -357,7 +358,7 @@ class K1Rewards:
 
     alive_bonus = RewTerm(
         func=mdp.is_alive,
-        weight= 27.290911171033287,
+        weight= 10.290911171033287,
     )
 
     # ------------- ビヘイビア報酬
@@ -393,13 +394,21 @@ class K1Rewards:
             }
     )
 
+    # height_potential = RewTerm(
+    #     func=mdp.robot_height_potential,
+    #     weight=12.326307219255284,
+    #     params={
+    #         "target_height": 0.48,
+    #         "sigma": 0.10,
+    #         "discount_factor": 0.9,
+    #     }
+    # )
+
     height_potential = RewTerm(
-        func=mdp.robot_height_potential,
-        weight=12.326307219255284,
+        func=mdp.minimum_height,
+        weight=-200.0,
         params={
-            "target_height": 0.50,
-            "sigma": 0.10,
-            "discount_factor": 0.9,
+            "min_height": 0.50,
         }
     )
 
@@ -418,9 +427,9 @@ class K1Rewards:
 
     upper_body_joint_regularization = RewTerm(
         func=mdp.upper_body_joint_regularization,
-        weight=0.8909868975828729,
+        weight=0.8909868975828729 * 5.0,
         params={
-            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Shoulder_.*", ".*_Elbow_.*"]),
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Shoulder_.*"]),
         }
     )
 
@@ -454,21 +463,21 @@ class K1Rewards:
     # ------------- シェイピング報酬（ペナルティ系）
     action_rate_l2_legs = RewTerm(
         func=mdp.action_rate_l2_subset,
-        weight=-1.0304555405977915,  # -0.8,
+        weight=-1.0304555405977915 * 1.2,
         params={
             "joint_name_patterns": [".*_Hip_.*", ".*_Knee_.*", ".*_Ankle_.*"],
             "action_term_name": "joint_pos",
         },
     )
 
-    action_rate_l2_arms = RewTerm(
-        func=mdp.action_rate_l2_subset,
-        weight=-1.190488722673567,   # -0.3,
-        params={
-            "joint_name_patterns": [".*_Shoulder_.*", ".*_Elbow_.*"],
-            "action_term_name": "joint_pos",
-        },
-    )
+    # action_rate_l2_arms = RewTerm(
+    #     func=mdp.action_rate_l2_subset,
+    #     weight=-1.190488722673567,   # -0.3,
+    #     params={
+    #         "joint_name_patterns": [".*_Shoulder_.*", ".*_Elbow_.*"],
+    #         "action_term_name": "joint_pos",
+    #     },
+    # )
 
     # base_jerk = RewTerm(
     #     func=mdp.base_jerk,
@@ -512,7 +521,7 @@ class K1Rewards:
 
     joint_acc = RewTerm(
         func=mdp.joint_acc_l2,
-        weight=-1e-8,
+        weight=-1e-8 * 1.2,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Ankle_.*", ".*_Hip_.*", ".*_Knee_.*"])},
     )
 
@@ -561,7 +570,8 @@ class CurriculumCfg:
         func=mdp.modify_reward_weight_by_episode_length_linearly,
         params = {
             "term_name" : "action_rate_l2_legs",
-            "target_weight" : -1.7 ,
+            "target_weight" : -2.0,
+            "init_levelup_threshold" : 500.0,
         })
 
     # action_rate_arms_cur = CurrTerm(
@@ -638,8 +648,8 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot"),
-            "static_friction_range": (0.95, 1.0),
-            "dynamic_friction_range": (0.95, 1.0),
+            "static_friction_range": (0.1, 1.0),
+            "dynamic_friction_range": (0.1, 1.0),
             "restitution_range": (0.0, 0.0),
             "num_buckets": 64,
         },
@@ -649,8 +659,8 @@ class EventCfg:
         func=mdp.randomize_rigid_body_mass,
         mode="startup",
         params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="Trunk"),
-            "mass_distribution_params": (-3.0, 3.0),
+            "asset_cfg": SceneEntityCfg("robot"),
+            "mass_distribution_params": (-1.0, 3.0),
             "operation": "add",
         },
     )
@@ -666,28 +676,29 @@ class EventCfg:
         },
     )
 
-    reset_base = EventTerm(
-        func=mdp.reset_root_state_uniform,
-        mode="reset",
-        params={
-            "pose_range": {"x": (-0.5, 0.5), "y": (-0.5, 0.5), "yaw": (-3.14, 3.14)},
-            "velocity_range": {
-                "x": (-0.5, 0.5),
-                "y": (-0.5, 0.5),
-                "z": (-0.5, 0.5),
-                "roll": (-0.15, 0.15),
-                "pitch": (-0.15, 0.15),
-                "yaw": (-0.5, 0.5),
-            },
-        },
-    )
+    # reset_base = EventTerm(
+    #     func=mdp.reset_root_state_uniform,
+    #     mode="reset",
+    #     params={
+    #         "pose_range": {"x": (0., 0.), "y": (0., 0.), "yaw": (0., 0.)},
+    #         "velocity_range": {
+    #             "x": (-0.5, 0.5),
+    #             "y": (-0.5, 0.5),
+    #             "z": (-0.5, 0.5),
+    #             "roll": (-0.15, 0.15),
+    #             "pitch": (-0.15, 0.15),
+    #             "yaw": (-0.5, 0.5),
+    #         },
+    #     },
+    # )
 
     reset_robot_joints = EventTerm(
         func=mdp.reset_joints_by_scale,
         mode="reset",
         params={
-            "position_range": (0.90, 1.10),   # これは減らした方が良いのかもしれない
+            "position_range": (0.5, 1.5),   # これは減らした方が良いのかもしれない
             "velocity_range": (0.0, 0.0),
+            "asset_cfg" : SceneEntityCfg("robot", joint_names=[".*_Hip_.*", ".*_Knee_.*", ".*_Ankle_.*"]),
         },
     )
 
@@ -774,7 +785,7 @@ class K1RoughEnvCfg_PLAY(K1RoughEnvCfg):
             self.scene.terrain.terrain_generator.num_cols = 5
             self.scene.terrain.terrain_generator.curriculum = False
 
-        self.commands.base_velocity.ranges.lin_vel_x = (1.0, 1.0)
+        self.commands.base_velocity.ranges.lin_vel_x = (0.5, 1.0)
         self.commands.base_velocity.ranges.lin_vel_y = (0.0, 0.0)
         self.commands.base_velocity.ranges.ang_vel_z = (-1.0, 1.0)
         self.commands.base_velocity.ranges.heading = (0.0, 0.0)
