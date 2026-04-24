@@ -284,13 +284,6 @@ class ObservationsCfg:
             func=mdp.projected_gravity,
             noise=Unoise(n_min=-0.05, n_max=0.05),
         )
-        # foot_contact_states = ObsTerm(
-        #         func=mdp.feet_contact,
-        #         params={
-        #             "sensor_cfg_right": SceneEntityCfg("contact_foot_right", body_names="right_foot_link"),
-        #             "sensor_cfg_left": SceneEntityCfg("contact_foot_left", body_names="left_foot_link"),
-        #         },
-        #     )
         velocity_commands = ObsTerm(func=mdp.generated_commands, params={"command_name": "base_velocity"})
         last_action = ObsTerm(func=mdp.last_action)
         # phase_time = ObsTerm(func=mdp.phase_time) rawなphaseはむしろノイズになる可能性があるらしいです。
@@ -306,22 +299,21 @@ class ObservationsCfg:
         """Observations for critic-only privileged state."""
 
         base_lin_vel = ObsTerm(func=mdp.base_lin_vel)
-        # body_height = ObsTerm(func=mdp.body_height)
-        # foot_height = ObsTerm(
-        #     func=mdp.foot_height,
-        #     params={
-        #         "foot_cfg_right": SceneEntityCfg("robot", body_names="right_foot_link"),
-        #         "foot_cfg_left": SceneEntityCfg("robot", body_names="left_foot_link"),
-        #     }
-        # )    # 要らなそうなやつを消してみる
 
         def __post_init__(self):
             self.enable_corruption = False
             self.concatenate_terms = True
 
     @configclass
-    class CriticCfg(PrivilegedCfg):
-        """Alias of privileged observations for frameworks expecting a critic group name."""
+    class CriticCfg(PolicyCfg):
+        """Critic observations: policy observations + privileged state (no noise)."""
+
+        base_lin_vel = ObsTerm(func=mdp.base_lin_vel)
+
+        def __post_init__(self):
+            # policy観測を全て含めた上で、criticには観測ノイズを入れない
+            self.enable_corruption = False
+            self.concatenate_terms = True
 
     # observation groups
     policy: PolicyCfg = PolicyCfg()
@@ -385,7 +377,7 @@ class K1Rewards:
     # これはポテンシャルもexpも使わない場合
     orientation_potential = RewTerm(
         func=mdp.orientation_potential,
-        weight=25.053406395507178,
+        weight=25.053406395507178 * 0.5,
         params={
             "sigma": 0.15, 
             "discount_factor": 0.985,
@@ -414,7 +406,7 @@ class K1Rewards:
 
     joint_regularization_potential = RewTerm(
         func=mdp.joint_reqularization_potential, 
-        weight=0.0065,
+        weight=0.0065 * 0.05,
         params={
             "sigma": 0.15,
             "pitch_slack": [0.01, 0.01, 5.0], # hip_pitch, knee_pitch, ankle_pitch
@@ -463,7 +455,7 @@ class K1Rewards:
     # ------------- シェイピング報酬（ペナルティ系）
     action_rate_l2_legs = RewTerm(
         func=mdp.action_rate_l2_subset,
-        weight=-1.0304555405977915 * 0.2,
+        weight=-1.0304555405977915 * 0.1,
         params={
             "joint_name_patterns": [".*_Hip_.*", ".*_Knee_.*", ".*_Ankle_.*"],
             "action_term_name": "joint_pos",
@@ -544,7 +536,7 @@ class CurriculumCfg:
         func=mdp.modify_reward_weight_by_episode_length_linearly,
         params = {
             "term_name" : "joint_regularization_potential",
-            "target_weight" : 7.5e-2,
+            "target_weight" : 7.5e-2 * 0.01,
             "init_levelup_threshold" : 0.0,
         }
     )
@@ -570,7 +562,7 @@ class CurriculumCfg:
         func=mdp.modify_reward_weight_by_episode_length_linearly,
         params = {
             "term_name" : "action_rate_l2_legs",
-            "target_weight" : -2.0,
+            "target_weight" : -2.0 * 0.3,
             "init_levelup_threshold" : 500.0,
         })
 
@@ -699,6 +691,16 @@ class EventCfg:
             "position_range": (0.5, 1.5),   # これは減らした方が良いのかもしれない
             "velocity_range": (0.0, 0.0),
             "asset_cfg" : SceneEntityCfg("robot", joint_names=[".*_Hip_.*", ".*_Knee_.*", ".*_Ankle_.*"]),
+        },
+    )
+
+    # アクション空間外の上半身関節の PD ターゲットを default に書き戻す
+    # （初期値 0 のまま放置すると PD が URDF のゼロ位置に引き戻してしまうため）
+    reset_upper_body_targets = EventTerm(
+        func=mdp.reset_joint_targets_to_default,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=[".*_Shoulder_.*", ".*_Elbow_.*"]),
         },
     )
 
